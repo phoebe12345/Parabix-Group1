@@ -1,5 +1,7 @@
 #include <idisa/idisa_arm_builder.h>
 
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/IntrinsicsAArch64.h>
 #include <llvm/IR/Module.h>
@@ -10,6 +12,49 @@
 #endif
 
 using namespace llvm;
+
+namespace {
+
+// Builds (once per module, cached by name) a 256-entry lookup table used to
+// turn an 8-bit sub-mask into a NEON TBL1 gather index.
+//
+// table[m] is a 16-byte vector where lane k (k = 0..popcount(m)-1) holds the
+// position of the k-th set bit in m, in increasing order; every remaining
+// lane holds 16, an out-of-range index. AArch64's TBL instruction is
+// defined to return 0 for any index >= the table size (16 for a single
+// register), so those lanes come back zero for free.
+//
+// This is deliberately built as a genuine "for each output position, which
+// input feeds it" gather map, not a "for each input, where does it go"
+// scatter map, since only the former works directly with TBL.
+llvm::GlobalVariable * getOrCreateByteCompressTable(llvm::Module * mod, llvm::LLVMContext & C) {
+    const char * const name = "__idisa_arm_byte_compress_table";
+    if (llvm::GlobalVariable * existing = mod->getGlobalVariable(name)) {
+        return existing;
+    }
+    llvm::IntegerType * i8Ty = llvm::IntegerType::getInt8Ty(C);
+    llvm::FixedVectorType * entryTy = llvm::FixedVectorType::get(i8Ty, 16);
+    llvm::SmallVector<llvm::Constant *, 256> entries(256);
+    for (unsigned m = 0; m < 256; m++) {
+        llvm::Constant * lanes[16];
+        unsigned pos = 0;
+        for (unsigned bit = 0; bit < 8; bit++) {
+            if (m & (1u << bit)) {
+                lanes[pos++] = llvm::ConstantInt::get(i8Ty, bit);
+            }
+        }
+        for (unsigned i = pos; i < 16; i++) {
+            lanes[i] = llvm::ConstantInt::get(i8Ty, 16); // out-of-range => TBL yields 0
+        }
+        entries[m] = llvm::ConstantVector::get(llvm::ArrayRef<llvm::Constant *>(lanes, 16));
+    }
+    llvm::ArrayType * tableTy = llvm::ArrayType::get(entryTy, 256);
+    llvm::Constant * tableInit = llvm::ConstantArray::get(tableTy, entries);
+    return new llvm::GlobalVariable(*mod, tableTy, /*isConstant=*/true,
+                                     llvm::GlobalValue::PrivateLinkage, tableInit, name);
+}
+
+} // anonymous namespace
 
 namespace IDISA {
 
@@ -142,6 +187,145 @@ Value * IDISA_ARM_Builder::mvmd_shuffle2(unsigned fw, Value * table0, Value * ta
     return IDISA_Builder::mvmd_shuffle2(fw, table0, table1, index_vector);
 }
 
+// mvmd_compress: NEON implementation.
+//
+// NEON has no direct hardware "compress" instruction (unlike AVX-512's
+// VPCOMPRESS or SVE2's COMPACT). An earlier version of this function built
+// a per-input destination index and fed it straight into mvmd_shuffle
+// (NEON's TBL1) - but TBL1 gathers ("for output slot i, which input feeds
+// it"), while that index was a scatter map ("for input i, where does it
+// go"). Those are inverse permutations, and using one where the other is
+// required silently produces the wrong output.
+//
+// This version instead builds the gather map directly, using a small
+// precomputed table (see getOrCreateByteCompressTable above) so no
+// inversion is ever needed:
+//
+//   1. Split the 16 one-byte fields into a low half (bits 0-7 of the mask)
+//      and a high half (bits 8-15). For each half, look up its 8-bit
+//      sub-mask in the table to get a ready-made TBL1 gather index that
+//      packs that half's selected bytes to the front, in order.
+//   2. Gather each half directly out of `a` with mvmd_shuffle (the high
+//      half's table entry is offset by +8 so it points at source lanes
+//      8-15 instead of 0-7).
+//   3. Slide the high half's compressed bytes up so they sit right after
+//      the low half's - i.e. starting at index countLow, the number of
+//      bits set in the low mask - using another TBL1 gather with a
+//      shift-by-countLow index vector. 8-bit wraparound arithmetic sends
+//      "negative" shifts to a large, out-of-range value, which TBL1
+//      naturally zeroes, so no separate masking is needed there.
+//   4. OR the two halves together, then (defensively) zero anything past
+//      the true total popcount.
+//
+// NOTE: this only handles mBitBlockWidth == 128, fw == 8. Other field
+// widths still fall back to the generic IDISA_Builder path.
+Value * IDISA_ARM_Builder::mvmd_compress(unsigned fw, Value * a, Value * select_mask) {
+    if (mBitBlockWidth == 128 && fw == 8) {
+        GlobalVariable * table = getOrCreateByteCompressTable(getModule(), getContext());
+        Type * i32Ty = getInt32Ty();
+        FixedVectorType * v16xi8Ty = FixedVectorType::get(getInt8Ty(), 16);
+
+        Value * maskBits = CreateZExtOrTrunc(select_mask, getInt16Ty());
+        Value * lowMaskByte = CreateTrunc(maskBits, getInt8Ty());
+        Value * highMaskByte = CreateTrunc(CreateLShr(maskBits, ConstantInt::get(getInt16Ty(), 8)), getInt8Ty());
+
+        auto loadTableEntry = [&](Value * idxByte) -> Value * {
+            Value * idx32 = CreateZExt(idxByte, i32Ty);
+            Value * gep = CreateInBoundsGEP(table->getValueType(), table,
+                                             {ConstantInt::get(i32Ty, 0), idx32});
+            return CreateLoad(v16xi8Ty, gep);
+        };
+
+        // Gather index for the low half points directly at source lanes 0-7.
+        Value * lowIdx = loadTableEntry(lowMaskByte);
+        // The table always encodes local positions 0-7; add 8 uniformly so
+        // the high half's index points at source lanes 8-15 instead.
+        // Sentinel (16) lanes become 24, still out-of-range, still zero.
+        Value * highIdxBase = loadTableEntry(highMaskByte);
+        Value * highIdx = simd_add(8, highIdxBase, getSplat(16, getInt8(8)));
+
+        Value * lowCompressed = mvmd_shuffle(8, a, lowIdx);
+        Value * highCompressed = mvmd_shuffle(8, a, highIdx);
+
+        Value * countLow = CreateZExtOrTrunc(CreatePopcount(lowMaskByte), getInt8Ty());
+        Constant * identity[16];
+        for (unsigned i = 0; i < 16; i++) {
+            identity[i] = getInt8(i);
+        }
+        Value * identityVec = ConstantVector::get(ArrayRef<Constant *>(identity, 16));
+        Value * shiftIdx = simd_sub(8, identityVec, simd_fill(8, countLow));
+        Value * shiftedHigh = mvmd_shuffle(8, highCompressed, shiftIdx);
+
+        Value * result = simd_or(lowCompressed, shiftedHigh);
+
+        // Defensive: zero anything past the true total popcount. By
+        // construction the two halves shouldn't overlap or leave gaps, but
+        // this costs little and guards against an off-by-one slipping in.
+        Value * totalCount = CreateZExtOrTrunc(CreatePopcount(maskBits), getInt8Ty());
+        Value * validLane = CreateICmpULT(identityVec, simd_fill(8, totalCount));
+        Value * zeroMask = CreateSExt(validLane, v16xi8Ty);
+
+        return simd_and(result, zeroMask);
+    }
+    return IDISA_Builder::mvmd_compress(fw, a, select_mask);
+}
+
+// mvmd_expand: NEON implementation.
+//
+// mvmd_expand is the mirror image of mvmd_compress: it spreads the packed
+// input fields (in positions 0, 1, 2, ...) out to whichever output
+// positions select_mask marks, leaving zero everywhere else.
+//
+// Unlike mvmd_compress, this direction doesn't need any inversion trick:
+// for output lane j, the field that belongs there (if any) is simply the
+// input field at "rank(j)" - the number of selected positions before j.
+// That's already exactly the index mvmd_shuffle/TBL1 wants ("for output
+// slot j, which input feeds it"), so we can compute it directly:
+//
+//   1. Build a per-lane boolean for whether output position j is selected
+//      (broadcast the mask, test one bit per lane).
+//   2. Take an exclusive prefix sum of that boolean to get rank(j) - reusing
+//      the existing hsimd_partial_sum helper rather than hand-rolling the
+//      scan again.
+//   3. Where a lane isn't selected, push its index out of TBL1's valid
+//      0-15 range so it comes back zero for free.
+//   4. Gather directly from `a` with that index vector.
+//
+// NOTE: this only handles mBitBlockWidth == 128, fw == 8. Other field
+// widths still fall back to the generic IDISA_Builder path.
+Value * IDISA_ARM_Builder::mvmd_expand(unsigned fw, Value * a, Value * select_mask) {
+    if (mBitBlockWidth == 128 && fw == 8) {
+        const unsigned fieldCount = 16;
+        FixedVectorType * v16xi8Ty = FixedVectorType::get(getInt8Ty(), fieldCount);
+
+        // Per-lane "is output position j selected" boolean.
+        Value * maskBits = CreateZExtOrTrunc(select_mask, getIntNTy(fieldCount));
+        Constant * bitPos[16];
+        for (unsigned i = 0; i < fieldCount; i++) {
+            bitPos[i] = ConstantInt::get(getIntNTy(fieldCount), 1u << i);
+        }
+        Value * bitPosVec = ConstantVector::get(ArrayRef<Constant *>(bitPos, fieldCount));
+        Value * maskSplat = simd_fill(fieldCount, maskBits);
+        Value * isSelected = CreateICmpNE(simd_and(maskSplat, bitPosVec), allZeroes());
+        Value * selectedBytes = CreateSExt(isSelected, v16xi8Ty); // 0xFF / 0x00 per lane
+
+        // Exclusive prefix sum: rank[j] = number of selected positions
+        // strictly before lane j. hsimd_partial_sum gives the inclusive
+        // version; subtracting the 0/1 flag converts it to exclusive.
+        Value * ones = CreateLShr(selectedBytes, getSplat(fieldCount, getInt8(7)));
+        Value * inclusiveRank = hsimd_partial_sum(8, ones);
+        Value * rank = simd_sub(8, inclusiveRank, ones);
+
+        // Unselected lanes should read nothing - push them out of TBL1's
+        // valid 0-15 range so it returns zero for those lanes automatically.
+        Value * outOfRange = getSplat(fieldCount, getInt8(fieldCount));
+        Value * gatherIdx = CreateSelect(isSelected, rank, outOfRange);
+
+        return mvmd_shuffle(8, a, gatherIdx);
+    }
+    return IDISA_Builder::mvmd_expand(fw, a, select_mask);
+}
+
 Value * IDISA_ARM_Builder::hsimd_packl(unsigned fw, Value * a, Value * b) {
     if ((fw >= 16) && (fw <= 64) && (getVectorBitWidth(a) == ARM_width)) {
         int nElems = getVectorBitWidth(a) / fw;
@@ -205,3 +389,4 @@ Value * IDISA_ARM_Builder::esimd_mergel(unsigned fw, Value * a, Value * b) {
 }
 
 }
+
