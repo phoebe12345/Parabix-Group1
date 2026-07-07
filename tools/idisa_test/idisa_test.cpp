@@ -160,7 +160,14 @@ void IdisaBinaryOpTestKernel::generateMultiBlockLogic(KernelBuilder & b, llvm::V
     } else if (mIdisaOperation == "mvmd_shuffle") {
         result = b.mvmd_shuffle(mTestFw, operand1, operand2);
     } else if (mIdisaOperation == "mvmd_compress") {
-        result = b.mvmd_compress(mTestFw, operand1, operand2);
+        // Real callers (e.g. deletion.cpp) pass a scalar bitmask built with
+        // hsimd_signmask, not a raw data block. Derive a realistic one from
+        // operand2 here so this test actually matches production usage.
+        Value * scalarMask = b.hsimd_signmask(mTestFw, operand2);
+        result = b.mvmd_compress(mTestFw, operand1, scalarMask);
+    } else if (mIdisaOperation == "mvmd_expand") {
+        Value * scalarMask = b.hsimd_signmask(mTestFw, operand2);
+        result = b.mvmd_expand(mTestFw, operand1, scalarMask);
     } else if (mIdisaOperation == "mvmd_dslli") {
         result = b.mvmd_dslli(mTestFw, operand1, operand2, mImmediateShift);
     } else {
@@ -213,6 +220,57 @@ void IdisaBinaryOpCheckKernel::generateDoBlockMethod(KernelBuilder & b) {
             Value * idx = b.CreateURem(b.mvmd_extract(mTestFw, operand2Block, i), ConstantInt::get(fwTy, fieldCount));
             Value * elt = b.CreateExtractElement(b.fwCast(mTestFw, operand1Block), b.CreateZExtOrTrunc(idx, b.getInt32Ty()));
             expectedBlock = b.mvmd_insert(mTestFw, expectedBlock, elt, i);
+        }
+    } else if (mIdisaOperation == "mvmd_compress") {
+        // Match the scalar bitmask built in IdisaBinaryOpTestKernel above.
+        Value * scalarMask = b.hsimd_signmask(mTestFw, operand2Block);
+        Type * maskTy = scalarMask->getType();
+        // For each input field i, precompute whether it's selected and its
+        // rank (how many selected fields come before it) - this is the
+        // output slot it should land in if selected.
+        std::vector<Value *> isSelected(fieldCount);
+        std::vector<Value *> rank(fieldCount);
+        Value * runningCount = ConstantInt::get(b.getInt32Ty(), 0);
+        for (unsigned i = 0; i < fieldCount; i++) {
+            Value * bit = b.CreateAnd(b.CreateLShr(scalarMask, ConstantInt::get(maskTy, i)), ConstantInt::get(maskTy, 1));
+            isSelected[i] = b.CreateICmpNE(bit, ConstantInt::get(maskTy, 0));
+            rank[i] = runningCount;
+            runningCount = b.CreateAdd(runningCount, b.CreateZExt(isSelected[i], b.getInt32Ty()));
+        }
+        // For each output slot j, find the (at most one) selected input
+        // field whose rank equals j, and place its value there.
+        for (unsigned j = 0; j < fieldCount; j++) {
+            Value * chosen = ConstantInt::get(fwTy, 0);
+            for (unsigned i = 0; i < fieldCount; i++) {
+                Value * matches = b.CreateAnd(isSelected[i], b.CreateICmpEQ(rank[i], ConstantInt::get(b.getInt32Ty(), j)));
+                Value * elt = b.mvmd_extract(mTestFw, operand1Block, i);
+                chosen = b.CreateSelect(matches, elt, chosen);
+            }
+            expectedBlock = b.mvmd_insert(mTestFw, expectedBlock, chosen, j);
+        }
+    } else if (mIdisaOperation == "mvmd_expand") {
+        // Mirror image of mvmd_compress's reference above: for each output
+        // slot j, if it's selected, it should hold operand1's field at
+        // rank(j) (how many selected slots come before j); otherwise 0.
+        Value * scalarMask = b.hsimd_signmask(mTestFw, operand2Block);
+        Type * maskTy = scalarMask->getType();
+        std::vector<Value *> isSelected(fieldCount);
+        std::vector<Value *> rank(fieldCount);
+        Value * runningCount = ConstantInt::get(b.getInt32Ty(), 0);
+        for (unsigned j = 0; j < fieldCount; j++) {
+            Value * bit = b.CreateAnd(b.CreateLShr(scalarMask, ConstantInt::get(maskTy, j)), ConstantInt::get(maskTy, 1));
+            isSelected[j] = b.CreateICmpNE(bit, ConstantInt::get(maskTy, 0));
+            rank[j] = runningCount;
+            runningCount = b.CreateAdd(runningCount, b.CreateZExt(isSelected[j], b.getInt32Ty()));
+        }
+        for (unsigned j = 0; j < fieldCount; j++) {
+            Value * chosen = ConstantInt::get(fwTy, 0);
+            for (unsigned k = 0; k < fieldCount; k++) {
+                Value * matches = b.CreateAnd(isSelected[j], b.CreateICmpEQ(rank[j], ConstantInt::get(b.getInt32Ty(), k)));
+                Value * elt = b.mvmd_extract(mTestFw, operand1Block, k);
+                chosen = b.CreateSelect(matches, elt, chosen);
+            }
+            expectedBlock = b.mvmd_insert(mTestFw, expectedBlock, chosen, j);
         }
     } else if (mIdisaOperation == "mvmd_dslli") {
         for (unsigned i = 0; i < fieldCount; i++) {

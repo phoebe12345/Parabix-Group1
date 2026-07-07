@@ -48,8 +48,8 @@
 #include <llvm/Transforms/Scalar/NewGVN.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
 #include <llvm/Transforms/Utils/Local.h>
-#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(14, 0, 0)
-#include <llvm/IR/IRPrintingPasses.h>
+#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(18, 0, 0)
+#include <llvm/IRPrinter/IRPrintingPasses.h>
 #else
 #include <llvm/IR/IRPrintingPasses.h>
 #endif

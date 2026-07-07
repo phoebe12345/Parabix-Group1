@@ -298,16 +298,22 @@ Value * IDISA_ARM_Builder::mvmd_expand(unsigned fw, Value * a, Value * select_ma
         const unsigned fieldCount = 16;
         FixedVectorType * v16xi8Ty = FixedVectorType::get(getInt8Ty(), fieldCount);
 
-        // Per-lane "is output position j selected" boolean.
-        Value * maskBits = CreateZExtOrTrunc(select_mask, getIntNTy(fieldCount));
-        Constant * bitPos[16];
+        // Per-lane "is output position j selected" boolean, built entirely
+        // with scalar ops (16 unrolled bit tests on the mask) rather than a
+        // vector AND against per-lane bit-position constants. A 16-bit mask
+        // needs one-hot constants up to 1<<15, which don't fit in 8-bit
+        // lanes - trying to do this as a single <16 x i16> vector op would
+        // require a 256-bit register, which doesn't exist here.
+        Value * maskBits = CreateZExtOrTrunc(select_mask, getInt16Ty());
+        Value * selectedBytes = UndefValue::get(v16xi8Ty);
         for (unsigned i = 0; i < fieldCount; i++) {
-            bitPos[i] = ConstantInt::get(getIntNTy(fieldCount), 1u << i);
+            Value * bit = CreateAnd(CreateLShr(maskBits, ConstantInt::get(getInt16Ty(), i)),
+                                     ConstantInt::get(getInt16Ty(), 1));
+            Value * isSelBit = CreateICmpNE(bit, ConstantInt::get(getInt16Ty(), 0));
+            Value * asByte = CreateSExt(isSelBit, getInt8Ty()); // 0xFF or 0x00
+            selectedBytes = CreateInsertElement(selectedBytes, asByte, ConstantInt::get(getInt32Ty(), i));
         }
-        Value * bitPosVec = ConstantVector::get(ArrayRef<Constant *>(bitPos, fieldCount));
-        Value * maskSplat = simd_fill(fieldCount, maskBits);
-        Value * isSelected = CreateICmpNE(simd_and(maskSplat, bitPosVec), allZeroes());
-        Value * selectedBytes = CreateSExt(isSelected, v16xi8Ty); // 0xFF / 0x00 per lane
+        Value * isSelected = CreateICmpNE(selectedBytes, allZeroes());
 
         // Exclusive prefix sum: rank[j] = number of selected positions
         // strictly before lane j. hsimd_partial_sum gives the inclusive
@@ -316,12 +322,18 @@ Value * IDISA_ARM_Builder::mvmd_expand(unsigned fw, Value * a, Value * select_ma
         Value * inclusiveRank = hsimd_partial_sum(8, ones);
         Value * rank = simd_sub(8, inclusiveRank, ones);
 
-        // Unselected lanes should read nothing - push them out of TBL1's
-        // valid 0-15 range so it returns zero for those lanes automatically.
+        // Unselected lanes should read nothing. We can't rely purely on
+        // pushing their index out of TBL1's 0-15 range: mvmd_shuffle's
+        // fw==8 path masks every index to its low 4 bits (via
+        // simd_select_lo) before the actual TBL1 call, so any sentinel
+        // value above 15 silently wraps back into range instead of
+        // zeroing out. So explicitly zero unselected lanes afterward
+        // using the isSelected mask we already have.
         Value * outOfRange = getSplat(fieldCount, getInt8(fieldCount));
         Value * gatherIdx = CreateSelect(isSelected, rank, outOfRange);
 
-        return mvmd_shuffle(8, a, gatherIdx);
+        Value * gathered = mvmd_shuffle(8, a, gatherIdx);
+        return simd_and(gathered, CreateSExt(isSelected, v16xi8Ty));
     }
     return IDISA_Builder::mvmd_expand(fw, a, select_mask);
 }
@@ -389,4 +401,3 @@ Value * IDISA_ARM_Builder::esimd_mergel(unsigned fw, Value * a, Value * b) {
 }
 
 }
-
