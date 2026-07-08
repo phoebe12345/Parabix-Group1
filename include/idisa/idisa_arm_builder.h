@@ -31,6 +31,7 @@ public:
     ~IDISA_ARM_Builder() {}
 
 private:
+    llvm::Value * tbl1(llvm::Value * table, llvm::Value * index_vector);
     llvm::Value * compressBytes(llvm::Value * a, llvm::Value * byteMask);
     llvm::Value * expandBytes(llvm::Value * a, llvm::Value * byteMask);
     llvm::Value * expandFieldMaskToBytes(llvm::Value * select_mask, unsigned fw);
