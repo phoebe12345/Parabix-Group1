@@ -505,7 +505,10 @@ IDISAtestFunctionType pipelineGen(CPUDriver & driver) {
 int main(int argc, char *argv[]) {
     codegen::ParseCommandLineOptions(argc, argv, {&testFlags, codegen::codegen_flags()});
     CPUDriver driver("idisa_test");
-    if (ShiftMask == 0) {
+    // only shift ops need the operand2 limit; elsewhere it strips sign bits the tests need
+    const bool isShiftOp = TestOperation == "simd_sllv" || TestOperation == "simd_srlv"
+                        || TestOperation == "simd_rotl" || TestOperation == "simd_rotr";
+    if (ShiftMask == 0 && isShiftOp) {
         ShiftMask = TestFieldWidth - 1;
     }
     auto idisaTestFunction = pipelineGen(driver);
