@@ -29,6 +29,20 @@ public:
     llvm::Value * mvmd_expand(unsigned fw, llvm::Value * a, llvm::Value * select_mask) override;
 
     ~IDISA_ARM_Builder() {}
+
+private:
+    // Shared byte-granularity implementations, used directly for fw==8 and
+    // reused by fw==16/32/64 after expanding the field-level mask to a
+    // per-byte mask (see expandFieldMaskToBytes).
+    llvm::Value * compressBytes(llvm::Value * a, llvm::Value * byteMask);
+    llvm::Value * expandBytes(llvm::Value * a, llvm::Value * byteMask);
+    // Turns a fieldCount-bit mask (one bit per fw-wide field) into a 16-bit
+    // mask (one bit per byte), replicating each field's bit across every
+    // byte that field occupies. Since a field's bytes are always adjacent
+    // and end up identically flagged, running the byte-granularity
+    // compress/expand on this expanded mask keeps each field's bytes
+    // together as a unit, in order - no separate per-width logic needed.
+    llvm::Value * expandFieldMaskToBytes(llvm::Value * select_mask, unsigned fw);
 };
 
 }
