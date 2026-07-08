@@ -59,8 +59,8 @@
 
 #include <llvm/Support/FileSystem.h>
 
-#include <llvm/Target/TargetMachine.h>             // for TargetMachine, Tar...
-#include <llvm/Target/TargetOptions.h>             // for TargetOptions
+#include <llvm/Target/TargetMachine.h>             
+#include <llvm/Target/TargetOptions.h>             
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/Local.h>
 #include <llvm/Transforms/Utils/Cloning.h>
