@@ -203,13 +203,20 @@ Value * IDISA_ARM_Builder::compressBytes(Value * a, Value * byteMask) {
         return CreateLoad(v16xi8Ty, gep);
     };
 
+    // mvmd_shuffle reduces indexes mod 16, but the sentinel scheme below needs
+    // TBL's native rule that any index >= 16 yields a zero lane, so call TBL1 directly.
+    Function * tbl1Fn = Intrinsic::getDeclaration(getModule(), Intrinsic::aarch64_neon_tbl1, v16xi8Ty);
+    auto tbl1 = [&](Value * tableVec, Value * idxVec) -> Value * {
+        return CreateCall(tbl1Fn->getFunctionType(), tbl1Fn, {fwCast(8, tableVec), fwCast(8, idxVec)});
+    };
+
     Value * lowIdx = loadTableEntry(lowMaskByte);
 
     Value * highIdxBase = loadTableEntry(highMaskByte);
     Value * highIdx = simd_add(8, highIdxBase, getSplat(16, getInt8(8)));
 
-    Value * lowCompressed = mvmd_shuffle(8, a, lowIdx);
-    Value * highCompressed = mvmd_shuffle(8, a, highIdx);
+    Value * lowCompressed = tbl1(a, lowIdx);
+    Value * highCompressed = tbl1(a, highIdx);
 
     Value * countLow = CreateZExtOrTrunc(CreatePopcount(lowMaskByte), getInt8Ty());
     Constant * identity[16];
@@ -218,7 +225,7 @@ Value * IDISA_ARM_Builder::compressBytes(Value * a, Value * byteMask) {
     }
     Value * identityVec = ConstantVector::get(ArrayRef<Constant *>(identity, 16));
     Value * shiftIdx = simd_sub(8, identityVec, simd_fill(8, countLow));
-    Value * shiftedHigh = mvmd_shuffle(8, highCompressed, shiftIdx);
+    Value * shiftedHigh = tbl1(highCompressed, shiftIdx);
 
     Value * result = simd_or(lowCompressed, shiftedHigh);
 
