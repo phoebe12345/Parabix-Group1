@@ -207,8 +207,6 @@ mIdisaOperation(idisa_op), mTestFw(fw), mImmediateShift(imm) {}
 
 void IdisaBinaryOpCheckKernel::generateDoBlockMethod(KernelBuilder & b) {
     Type * fwTy = b.getIntNTy(mTestFw);
-    BasicBlock * reportFailure = b.CreateBasicBlock("reportFailure");
-    BasicBlock * continueTest = b.CreateBasicBlock("continueTest");
     Constant * const ZeroConst = b.getSize(0);
     Value * operand1Block = b.loadInputStreamBlock("operand1", ZeroConst);
     Value * operand2Block = b.loadInputStreamBlock("operand2", ZeroConst);
@@ -411,6 +409,9 @@ void IdisaBinaryOpCheckKernel::generateDoBlockMethod(KernelBuilder & b) {
     Value * failure_count = b.CreateUDiv(b.bitblock_popcount(failures), b.getSize(mTestFw));
     b.setScalarField("totalFailures", b.CreateAdd(b.getScalarField("totalFailures"), failure_count));
     if (!QuietMode) {
+        // created here so they always get terminators; unterminated blocks crash the JIT under -q
+        BasicBlock * reportFailure = b.CreateBasicBlock("reportFailure");
+        BasicBlock * continueTest = b.CreateBasicBlock("continueTest");
         b.CreateCondBr(anyFailure, reportFailure, continueTest);
         b.SetInsertPoint(reportFailure);
         b.CallPrintRegister("operand1", b.bitCast(operand1Block));
