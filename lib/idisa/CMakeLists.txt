@@ -11,6 +11,7 @@ SRC
     idisa_builder.cpp
     idisa_i64_builder.cpp
     idisa_arm_builder.cpp
+    idisa_arm_sve2_builder.cpp
 DEPS
     codegen
 )
