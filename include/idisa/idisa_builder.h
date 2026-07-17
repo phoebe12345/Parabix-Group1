@@ -44,6 +44,8 @@ enum class Feature : size_t {
     AVX512_VBMI2,
     AVX512_VPOPCNTDQ,
     // ---------------
+    ARM_SVE2,
+    // ---------------
     __Count
 };
 

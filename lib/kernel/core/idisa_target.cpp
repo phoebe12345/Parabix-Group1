@@ -12,6 +12,7 @@
 #include <llvm/TargetParser/AArch64TargetParser.h>
 #endif
 #include <idisa/idisa_arm_builder.h>
+#include <idisa/idisa_arm_sve2_builder.h>
 #endif
 #ifdef PARABIX_X86_TARGET
 #include <idisa/idisa_sse_builder.h>
@@ -88,6 +89,41 @@ bool ARM_available() {
     return false;
 }
 
+// SVE2 support is optional even on hardware that has SVE - the bit-
+// manipulation instructions this project cares about (COMPACT and similar)
+// are specifically part of SVE2, not the original SVE. This must be checked
+// separately from ARM_available()/NEON support: a chip can support NEON
+// without SVE2, and (per the ARM architecture) SVE2 always implies NEON, so
+// callers should still check ARM_available() as well, not use this alone.
+bool SVE2_available() {
+#ifdef PARABIX_ARM_TARGET
+#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(16, 0, 0)
+#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(17, 0, 0)
+    auto info = llvm::AArch64::parseCpu(sys::getHostCPUName());
+    std::vector<StringRef> extNames;
+    if (info) {
+        llvm::AArch64::getExtensionFeatures(info->Arch.DefaultExts | info->DefaultExtensions, extNames);
+    }
+#else
+    const llvm::AArch64::CpuInfo & info = llvm::AArch64::parseCpu(sys::getHostCPUName());
+    std::vector<StringRef> extNames;
+    llvm::AArch64::getExtensionFeatures(info.Arch.DefaultExts | info.DefaultExtensions, extNames);
+#endif
+    for (const auto eName : extNames) {
+        if (eName == "+sve2") return true;
+    }
+    return false;
+#else
+    StringMap<bool> features;
+    if (LLVM_UNLIKELY(!sys::getHostCPUFeatures(features))) {
+        return false;
+    }
+    return features.lookup("sve2");
+#endif
+#endif
+    return false;
+}
+
 bool AVX2_available() {
     #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(19, 0, 0)
     StringMap<bool> features;
@@ -124,6 +160,11 @@ KernelBuilder * GetIDISA_Builder(llvm::LLVMContext & C, const StringMap<bool> & 
         codegen::BlockSize = 128;
     }
     if (ARM_available()) {
+        llvm::errs() << "[debug] SVE2_available() = " << SVE2_available() << "\n";
+        if (SVE2_available()) {
+            featureSet.set((size_t)Feature::ARM_SVE2);
+            return new KernelBuilderImpl<IDISA_ARM_SVE2_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
+        }
         return new KernelBuilderImpl<IDISA_ARM_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
     }
 #endif
