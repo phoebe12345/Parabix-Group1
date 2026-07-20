@@ -17,7 +17,12 @@ public:
 
     std::string getBuilderUniqueName() override;
 
+    // SVE2-specific compress
+    
+    llvm::Value * mvmd_compress(unsigned fw, llvm::Value * a, llvm::Value * select_mask) override;
+
     ~IDISA_ARM_SVE2_Builder() override {}
 };
 
 }
+
