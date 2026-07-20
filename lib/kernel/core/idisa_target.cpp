@@ -89,12 +89,6 @@ bool ARM_available() {
     return false;
 }
 
-// SVE2 support is optional even on hardware that has SVE - the bit-
-// manipulation instructions this project cares about (COMPACT and similar)
-// are specifically part of SVE2, not the original SVE. This must be checked
-// separately from ARM_available()/NEON support: a chip can support NEON
-// without SVE2, and (per the ARM architecture) SVE2 always implies NEON, so
-// callers should still check ARM_available() as well, not use this alone.
 bool SVE2_available() {
 #ifdef PARABIX_ARM_TARGET
 #if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(16, 0, 0)
