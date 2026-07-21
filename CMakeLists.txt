@@ -522,6 +522,11 @@ add_test(
   WORKING_DIRECTORY ${QA_DIR}/csv/csv2json
   COMMAND ./run_csv2json "${BIN_DIR}/csv2json")
 
+add_test(
+  NAME idisa_mask_sweep
+  WORKING_DIRECTORY ${QA_DIR}/IDISA_test
+  COMMAND ./run_mask_sweep "${BIN_DIR}/idisa_test")
+
 
 SET_PROPERTY(TEST proptest PROPERTY TIMEOUT 1500)
 SET_PROPERTY(TEST abc_test PROPERTY TIMEOUT 100)

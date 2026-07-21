@@ -10,7 +10,9 @@
 # Each 16-byte block of operand2 is built so hsimd_signmask(8, block) equals
 # a chosen 16-bit mask: byte i has its high bit set iff mask bit i is set.
 #
-import codecs
+def hex_for_idisa_test(data):
+    # HexToBinary reads the low nibble from the first char of each pair, unlike codecs hex encoding
+    return "".join(format(b & 0xF, "x") + format(b >> 4, "x") for b in data).encode()
 
 def bytes_for_mask(mask):
     # one byte per bit position; 0x80 if that bit is set (sign bit -> selected),
@@ -49,9 +51,9 @@ def main():
     operand1_bytes = bytes(range(16)) * block_count
 
     with open("compress_edge_a", "wb") as f1:
-        f1.write(codecs.encode(operand1_bytes, "hex"))
+        f1.write(hex_for_idisa_test(operand1_bytes))
     with open("compress_edge_b", "wb") as f2:
-        f2.write(codecs.encode(operand2_bytes, "hex"))
+        f2.write(hex_for_idisa_test(operand2_bytes))
 
     print(f"Generated {block_count} targeted blocks covering:")
     print("  - all-zero and all-one masks")

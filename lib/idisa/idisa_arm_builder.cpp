@@ -187,6 +187,13 @@ Value * IDISA_ARM_Builder::expandFieldMaskToBytes(Value * select_mask, unsigned 
     return byteMask;
 }
 
+// raw TBL1: indexes >= 16 yield zero lanes, unlike mvmd_shuffle which reduces them mod 16
+Value * IDISA_ARM_Builder::tbl1(Value * table, Value * index_vector) {
+    Function * fn = Intrinsic::getDeclaration(getModule(), Intrinsic::aarch64_neon_tbl1,
+                                              FixedVectorType::get(getInt8Ty(), 16));
+    return CreateCall(fn->getFunctionType(), fn, {fwCast(8, table), fwCast(8, index_vector)});
+}
+
 Value * IDISA_ARM_Builder::compressBytes(Value * a, Value * byteMask) {
     GlobalVariable * table = getOrCreateByteCompressTable(getModule(), getContext());
     Type * i32Ty = getInt32Ty();
@@ -208,8 +215,8 @@ Value * IDISA_ARM_Builder::compressBytes(Value * a, Value * byteMask) {
     Value * highIdxBase = loadTableEntry(highMaskByte);
     Value * highIdx = simd_add(8, highIdxBase, getSplat(16, getInt8(8)));
 
-    Value * lowCompressed = mvmd_shuffle(8, a, lowIdx);
-    Value * highCompressed = mvmd_shuffle(8, a, highIdx);
+    Value * lowCompressed = tbl1(a, lowIdx);
+    Value * highCompressed = tbl1(a, highIdx);
 
     Value * countLow = CreateZExtOrTrunc(CreatePopcount(lowMaskByte), getInt8Ty());
     Constant * identity[16];
@@ -218,7 +225,7 @@ Value * IDISA_ARM_Builder::compressBytes(Value * a, Value * byteMask) {
     }
     Value * identityVec = ConstantVector::get(ArrayRef<Constant *>(identity, 16));
     Value * shiftIdx = simd_sub(8, identityVec, simd_fill(8, countLow));
-    Value * shiftedHigh = mvmd_shuffle(8, highCompressed, shiftIdx);
+    Value * shiftedHigh = tbl1(highCompressed, shiftIdx);
 
     Value * result = simd_or(lowCompressed, shiftedHigh);
 
@@ -264,8 +271,7 @@ Value * IDISA_ARM_Builder::expandBytes(Value * a, Value * byteMask) {
     Value * outOfRange = getSplat(fieldCount, getInt8(fieldCount));
     Value * gatherIdx = CreateSelect(isSelected, rank, outOfRange);
 
-    Value * gathered = mvmd_shuffle(8, a, gatherIdx);
-    return simd_and(gathered, CreateSExt(isSelected, v16xi8Ty));
+    return tbl1(a, gatherIdx);
 }
 
 Value * IDISA_ARM_Builder::mvmd_expand(unsigned fw, Value * a, Value * select_mask) {

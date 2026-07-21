@@ -207,8 +207,6 @@ mIdisaOperation(idisa_op), mTestFw(fw), mImmediateShift(imm) {}
 
 void IdisaBinaryOpCheckKernel::generateDoBlockMethod(KernelBuilder & b) {
     Type * fwTy = b.getIntNTy(mTestFw);
-    BasicBlock * reportFailure = b.CreateBasicBlock("reportFailure");
-    BasicBlock * continueTest = b.CreateBasicBlock("continueTest");
     Constant * const ZeroConst = b.getSize(0);
     Value * operand1Block = b.loadInputStreamBlock("operand1", ZeroConst);
     Value * operand2Block = b.loadInputStreamBlock("operand2", ZeroConst);
@@ -411,6 +409,9 @@ void IdisaBinaryOpCheckKernel::generateDoBlockMethod(KernelBuilder & b) {
     Value * failure_count = b.CreateUDiv(b.bitblock_popcount(failures), b.getSize(mTestFw));
     b.setScalarField("totalFailures", b.CreateAdd(b.getScalarField("totalFailures"), failure_count));
     if (!QuietMode) {
+        // created here so they always get terminators; unterminated blocks crash the JIT under -q
+        BasicBlock * reportFailure = b.CreateBasicBlock("reportFailure");
+        BasicBlock * continueTest = b.CreateBasicBlock("continueTest");
         b.CreateCondBr(anyFailure, reportFailure, continueTest);
         b.SetInsertPoint(reportFailure);
         b.CallPrintRegister("operand1", b.bitCast(operand1Block));
@@ -505,7 +506,10 @@ IDISAtestFunctionType pipelineGen(CPUDriver & driver) {
 int main(int argc, char *argv[]) {
     codegen::ParseCommandLineOptions(argc, argv, {&testFlags, codegen::codegen_flags()});
     CPUDriver driver("idisa_test");
-    if (ShiftMask == 0) {
+    // only shift ops need the operand2 limit; elsewhere it strips sign bits the tests need
+    const bool isShiftOp = TestOperation == "simd_sllv" || TestOperation == "simd_srlv"
+                        || TestOperation == "simd_rotl" || TestOperation == "simd_rotr";
+    if (ShiftMask == 0 && isShiftOp) {
         ShiftMask = TestFieldWidth - 1;
     }
     auto idisaTestFunction = pipelineGen(driver);

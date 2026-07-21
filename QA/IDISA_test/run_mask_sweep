@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+# Usage: ./run_mask_sweep <path-to-idisa_test>
+#
+# Runs mvmd_compress and mvmd_expand at every field width over all 65536
+# possible block masks. Data files are generated on first use.
+
+idisa_test="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+cd "$(dirname "$0")"
+
+if [ ! -f mask_sweep_a ] || [ ! -f mask_sweep_b ]; then
+    python3 gen_mask_sweep.py || exit 1
+fi
+
+failures=0
+for op in mvmd_compress mvmd_expand; do
+    for fw in 8 16 32 64; do
+        if "$idisa_test" -q $op $fw mask_sweep_a mask_sweep_b; then
+            echo "PASS: $op fw=$fw"
+        else
+            echo "FAIL: $op fw=$fw"
+            failures=$((failures + 1))
+        fi
+    done
+done
+
+exit $failures
