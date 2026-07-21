@@ -30,7 +30,7 @@ public:
 
     ~IDISA_ARM_Builder() {}
 
-private:
+protected:
     llvm::Value * compressBytes(llvm::Value * a, llvm::Value * byteMask);
     llvm::Value * expandBytes(llvm::Value * a, llvm::Value * byteMask);
     llvm::Value * expandFieldMaskToBytes(llvm::Value * select_mask, unsigned fw);

@@ -20,7 +20,7 @@ std::string IDISA_ARM_SVE2_Builder::getBuilderUniqueName() {
 }
 
 Value * IDISA_ARM_SVE2_Builder::mvmd_compress(unsigned fw, Value * a, Value * select_mask) {
-    if (mBitBlockWidth == 128 && fw == 8) {
+    if (mBitBlockWidth == 128 && (fw == 8 || fw == 16 || fw == 32 || fw == 64)) {
         Type * i1Ty = getInt1Ty();
         Type * i8Ty = getInt8Ty();
         auto * fixed16xi8Ty = FixedVectorType::get(i8Ty, 16);
@@ -28,7 +28,8 @@ Value * IDISA_ARM_SVE2_Builder::mvmd_compress(unsigned fw, Value * a, Value * se
         auto * scalable16xi8Ty = ScalableVectorType::get(i8Ty, 16);
         auto * scalable16xi1Ty = ScalableVectorType::get(i1Ty, 16);
 
-        Value * maskBits = CreateZExtOrTrunc(select_mask, getInt16Ty());
+        Value * maskBits = (fw == 8) ? CreateZExtOrTrunc(select_mask, getInt16Ty())
+                                      : expandFieldMaskToBytes(select_mask, fw);
         Value * predBits = UndefValue::get(fixed16xi1Ty);
         for (unsigned i = 0; i < 16; i++) {
             Value * bit = CreateAnd(CreateLShr(maskBits, ConstantInt::get(getInt16Ty(), i)),
@@ -55,7 +56,6 @@ Value * IDISA_ARM_SVE2_Builder::mvmd_compress(unsigned fw, Value * a, Value * se
         Value * scalableResult = CreateCall(compact->getFunctionType(), compact,
                                              {scalablePred, scalableData});
 
-        // Extract the low 16 lanes back into our fixed-width representation.
         Function * extractResult = Intrinsic::getDeclaration(getModule(), Intrinsic::vector_extract,
                                                                {fixed16xi8Ty, scalable16xi8Ty});
         Value * fixedResult = CreateCall(extractResult->getFunctionType(), extractResult,
@@ -66,13 +66,14 @@ Value * IDISA_ARM_SVE2_Builder::mvmd_compress(unsigned fw, Value * a, Value * se
 }
 
 Value * IDISA_ARM_SVE2_Builder::mvmd_expand(unsigned fw, Value * a, Value * select_mask) {
-    if (mBitBlockWidth == 128 && fw == 8) {
+    if (mBitBlockWidth == 128 && (fw == 8 || fw == 16 || fw == 32 || fw == 64)) {
         const unsigned fieldCount = 16;
         Type * i8Ty = getInt8Ty();
         auto * fixed16xi8Ty = FixedVectorType::get(i8Ty, fieldCount);
         auto * scalable16xi8Ty = ScalableVectorType::get(i8Ty, 16);
 
-        Value * maskBits = CreateZExtOrTrunc(select_mask, getInt16Ty());
+        Value * maskBits = (fw == 8) ? CreateZExtOrTrunc(select_mask, getInt16Ty())
+                                      : expandFieldMaskToBytes(select_mask, fw);
         Value * selectedBytes = UndefValue::get(fixed16xi8Ty);
         for (unsigned i = 0; i < fieldCount; i++) {
             Value * bit = CreateAnd(CreateLShr(maskBits, ConstantInt::get(getInt16Ty(), i)),
