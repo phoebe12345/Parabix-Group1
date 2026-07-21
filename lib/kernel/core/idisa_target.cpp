@@ -154,7 +154,7 @@ KernelBuilder * GetIDISA_Builder(llvm::LLVMContext & C, const StringMap<bool> & 
         codegen::BlockSize = 128;
     }
     if (ARM_available()) {
-        llvm::errs() << "[debug] SVE2_available() = " << SVE2_available() << "\n";
+        //llvm::errs() << "[debug] SVE2_available() = " << SVE2_available() << "\n";
         if (SVE2_available()) {
             featureSet.set((size_t)Feature::ARM_SVE2);
             return new KernelBuilderImpl<IDISA_ARM_SVE2_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
