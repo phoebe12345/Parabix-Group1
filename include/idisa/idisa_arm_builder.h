@@ -27,6 +27,8 @@ public:
     llvm::Value * mvmd_shuffle2(unsigned fw, llvm::Value * table0, llvm::Value * table1, llvm::Value * index_vector) override;
     llvm::Value * mvmd_compress(unsigned fw, llvm::Value * a, llvm::Value * select_mask) override;
     llvm::Value * mvmd_expand(unsigned fw, llvm::Value * a, llvm::Value * select_mask) override;
+    llvm::Value * simd_sllv(unsigned fw, llvm::Value * a, llvm::Value * shifts) override;
+    llvm::Value * simd_srlv(unsigned fw, llvm::Value * a, llvm::Value * shifts) override;
 
     ~IDISA_ARM_Builder() {}
 
