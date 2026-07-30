@@ -344,23 +344,14 @@ Value * IDISA_ARM_Builder::esimd_mergel(unsigned fw, Value * a, Value * b) {
   return IDISA_Builder::esimd_mergel(fw, a, b);
 }
 
-// Native variable shift for sub-byte fields. Callers (pext/pdep/rotl/rotr) only feed
-// in-range amounts (< fw), so a single byte-lane USHL/USHR plus a fixed field-isolation
-// mask replaces the generic emulated inductive-doubling loop.
+// Native variable shift for 2-bit fields. fw==4 moved to the generic
+// builder (idisa_builder.cpp) since it uses no ARM-specific intrinsics -
+// every target benefits from it now, not just this one. Callers
+// (pext/pdep/rotl/rotr) only feed in-range amounts (< fw).
 Value * IDISA_ARM_Builder::simd_sllv(unsigned fw, Value * v, Value * shifts) {
-    if (getVectorBitWidth(v) == ARM_width && (fw == 2 || fw == 4)) {
+    if (getVectorBitWidth(v) == ARM_width && fw == 2) {
         auto splat8 = [&](uint8_t x) { return getSplat(16, getInt8(x)); };
-        if (fw == 4) {
-            // remask each nibble after the byte shift so bits never carry across the nibble boundary
-            Value * loData = simd_and(v, splat8(0x0F));
-            Value * hiData = simd_and(v, splat8(0xF0));
-            Value * loAmt = simd_and(shifts, splat8(0x0F));
-            Value * hiAmt = simd_srli(8, shifts, 4);
-            Value * loSh = simd_and(CreateShl(fwCast(8, loData), fwCast(8, loAmt)), splat8(0x0F));
-            Value * hiSh = simd_and(CreateShl(fwCast(8, hiData), fwCast(8, hiAmt)), splat8(0xF0));
-            return simd_or(loSh, hiSh);
-        }
-        // fw == 2: amount is one bit per field; expand it to a full 0b11 field mask and BSL-select
+        // amount is one bit per field; expand it to a full 0b11 field mask and BSL-select
         Value * shifted = simd_and(CreateShl(fwCast(8, v), splat8(1)), splat8(0xAA));
         Value * a = simd_and(shifts, splat8(0x55));
         Value * sel = simd_or(a, CreateShl(fwCast(8, a), splat8(1)));
@@ -370,17 +361,8 @@ Value * IDISA_ARM_Builder::simd_sllv(unsigned fw, Value * v, Value * shifts) {
 }
 
 Value * IDISA_ARM_Builder::simd_srlv(unsigned fw, Value * v, Value * shifts) {
-    if (getVectorBitWidth(v) == ARM_width && (fw == 2 || fw == 4)) {
+    if (getVectorBitWidth(v) == ARM_width && fw == 2) {
         auto splat8 = [&](uint8_t x) { return getSplat(16, getInt8(x)); };
-        if (fw == 4) {
-            Value * loData = simd_and(v, splat8(0x0F));
-            Value * hiData = simd_and(v, splat8(0xF0));
-            Value * loAmt = simd_and(shifts, splat8(0x0F));
-            Value * hiAmt = simd_srli(8, shifts, 4);
-            Value * loSh = simd_and(CreateLShr(fwCast(8, loData), fwCast(8, loAmt)), splat8(0x0F));
-            Value * hiSh = simd_and(CreateLShr(fwCast(8, hiData), fwCast(8, hiAmt)), splat8(0xF0));
-            return simd_or(loSh, hiSh);
-        }
         Value * shifted = simd_and(CreateLShr(fwCast(8, v), splat8(1)), splat8(0x55));
         Value * a = simd_and(shifts, splat8(0x55));
         Value * sel = simd_or(a, CreateShl(fwCast(8, a), splat8(1)));
