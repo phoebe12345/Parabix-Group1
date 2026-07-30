@@ -262,7 +262,7 @@ Value * IDISA_ARM_Builder::expandBytes(Value * a, Value * byteMask) {
         CreateStore(asByte, bytePtr);
     }
     Value * selectedBytes = CreateLoad(v16xi8Ty, selectedBytesBuf);
-    Value * isSelected = CreateICmpNE(selectedBytes, allZeroes());
+    Value * isSelected = CreateICmpNE(selectedBytes, fwCast(8, allZeroes()));
 
     Value * ones = CreateLShr(selectedBytes, getSplat(fieldCount, getInt8(7)));
     Value * inclusiveRank = hsimd_partial_sum(8, ones);
