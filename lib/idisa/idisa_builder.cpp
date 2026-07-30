@@ -529,6 +529,21 @@ Value * IDISA_Builder::simd_srai(unsigned fw, Value * a, unsigned shift) {
 
 Value * IDISA_Builder::simd_sllv(unsigned fw, Value * v, Value * shifts) {
     if (fw >= 8) return CreateShl(fwCast(fw, v), fwCast(fw, shifts));
+    if (fw == 4 && getVectorBitWidth(v) == 128) {
+        // Fast path for 4-bit fields: two byte-lane shifts plus masking to
+        // keep bits from crossing the nibble boundary, instead of the
+        // generic doubling loop below. This is portable - no
+        // architecture-specific intrinsics - so every target benefits,
+        // not just the one it was first written for.
+        auto splat8 = [&](uint8_t x) { return getSplat(16, getInt8(x)); };
+        Value * loData = simd_and(v, splat8(0x0F));
+        Value * hiData = simd_and(v, splat8(0xF0));
+        Value * loAmt = simd_and(shifts, splat8(0x0F));
+        Value * hiAmt = simd_srli(8, shifts, 4);
+        Value * loSh = simd_and(CreateShl(fwCast(8, loData), fwCast(8, loAmt)), splat8(0x0F));
+        Value * hiSh = simd_and(CreateShl(fwCast(8, hiData), fwCast(8, hiAmt)), splat8(0xF0));
+        return simd_or(loSh, hiSh);
+    }
     auto vec_width = getVectorBitWidth(v);
     Value * vecZeroes = ConstantVector::getNullValue(v->getType());
     Value * w = v;
@@ -549,6 +564,16 @@ Value * IDISA_Builder::simd_sllv(unsigned fw, Value * v, Value * shifts) {
 
 Value * IDISA_Builder::simd_srlv(unsigned fw, Value * v, Value * shifts) {
     if (fw >= 8) return CreateLShr(fwCast(fw, v), fwCast(fw, shifts));
+    if (fw == 4 && getVectorBitWidth(v) == 128) {
+        auto splat8 = [&](uint8_t x) { return getSplat(16, getInt8(x)); };
+        Value * loData = simd_and(v, splat8(0x0F));
+        Value * hiData = simd_and(v, splat8(0xF0));
+        Value * loAmt = simd_and(shifts, splat8(0x0F));
+        Value * hiAmt = simd_srli(8, shifts, 4);
+        Value * loSh = simd_and(CreateLShr(fwCast(8, loData), fwCast(8, loAmt)), splat8(0x0F));
+        Value * hiSh = simd_and(CreateLShr(fwCast(8, hiData), fwCast(8, hiAmt)), splat8(0xF0));
+        return simd_or(loSh, hiSh);
+    }
     Value * vecZeroes = ConstantVector::getNullValue(v->getType());
     auto vec_width = getVectorBitWidth(v);
     Value * w = v;
