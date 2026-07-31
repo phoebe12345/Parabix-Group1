@@ -59,61 +59,34 @@ Features getHostCPUFeatures(const StringMap<bool> & features) {
     return hostCPUFeatures;
 }
 
+// NOTE: previously this used llvm::AArch64::parseCpu(sys::getHostCPUName())
+// to look up a known CPU model's default extension list. That approach
+// silently fails (returns an empty/false result) on emulated CPUs whose
+// reported model name isn't in LLVM's built-in table - confirmed this is
+// exactly what happens under QEMU's "-cpu max", which reports a synthetic
+// CPU identity. Reading the feature flags directly, the same mechanism
+// "lscpu" itself uses, works correctly on both real and emulated hardware,
+// since it doesn't depend on recognizing the CPU model at all.
 bool ARM_available() {
 #ifdef PARABIX_ARM_TARGET
-#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(16, 0, 0)
-#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(17, 0, 0)
-    auto info = llvm::AArch64::parseCpu(sys::getHostCPUName());
-    std::vector<StringRef> extNames;
-    if (info) {
-        llvm::AArch64::getExtensionFeatures(info->Arch.DefaultExts | info->DefaultExtensions, extNames);
-    }
-#else
-    const llvm::AArch64::CpuInfo & info = llvm::AArch64::parseCpu(sys::getHostCPUName());
-    std::vector<StringRef> extNames;
-    llvm::AArch64::getExtensionFeatures(info.Arch.DefaultExts | info.DefaultExtensions, extNames);
-#endif
-    for (const auto eName : extNames) {
-        //llvm::errs() << "Extension: " << eName << "\n";
-        if (eName == "+neon") return true;
-    }
-    return false;
-#else
     StringMap<bool> features;
     if (LLVM_UNLIKELY(!sys::getHostCPUFeatures(features))) {
         return false;
     }
-    return features.lookup("neon");
-#endif
+    // "asimd" is the flag name Linux/LLVM report for NEON on AArch64;
+    // checking "neon" too in case that naming differs on some targets.
+    return features.lookup("asimd") || features.lookup("neon");
 #endif
     return false;
 }
 
 bool SVE2_available() {
 #ifdef PARABIX_ARM_TARGET
-#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(16, 0, 0)
-#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(17, 0, 0)
-    auto info = llvm::AArch64::parseCpu(sys::getHostCPUName());
-    std::vector<StringRef> extNames;
-    if (info) {
-        llvm::AArch64::getExtensionFeatures(info->Arch.DefaultExts | info->DefaultExtensions, extNames);
-    }
-#else
-    const llvm::AArch64::CpuInfo & info = llvm::AArch64::parseCpu(sys::getHostCPUName());
-    std::vector<StringRef> extNames;
-    llvm::AArch64::getExtensionFeatures(info.Arch.DefaultExts | info.DefaultExtensions, extNames);
-#endif
-    for (const auto eName : extNames) {
-        if (eName == "+sve2") return true;
-    }
-    return false;
-#else
     StringMap<bool> features;
     if (LLVM_UNLIKELY(!sys::getHostCPUFeatures(features))) {
         return false;
     }
     return features.lookup("sve2");
-#endif
 #endif
     return false;
 }
