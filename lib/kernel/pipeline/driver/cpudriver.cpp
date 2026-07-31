@@ -219,6 +219,7 @@ void * CPUDriver::finalizeObject(kernel::Kernel * const pk) {
         // than rebuilding them by hand, keeps this in sync with whatever
         // selectTarget() actually resolved.
         const std::string featStr = mTarget->getTargetFeatureString().str();
+        llvm::errs() << "[debug] featStr = " << featStr << "\n";
         const std::string cpuStr = mTarget->getTargetCPU().str();
         for (Module * M : S) {
             for (Function & F : *M) {
