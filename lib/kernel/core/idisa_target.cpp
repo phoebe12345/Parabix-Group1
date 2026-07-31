@@ -126,9 +126,9 @@ KernelBuilder * GetIDISA_Builder(llvm::LLVMContext & C, const StringMap<bool> & 
     if (LLVM_LIKELY(codegen::BlockSize == 0)) {  // No BlockSize override: use processor SIMD width
         codegen::BlockSize = 128;
     }
-    \\llvm::errs() << "[debug] ARM_available() = " << ARM_available() << "\n";
+    //llvm::errs() << "[debug] ARM_available() = " << ARM_available() << "\n";
     if (ARM_available()) {
-        \\llvm::errs() << "[debug] SVE2_available() = " << SVE2_available() << "\n";
+        //llvm::errs() << "[debug] SVE2_available() = " << SVE2_available() << "\n";
         if (SVE2_available()) {
             featureSet.set((size_t)Feature::ARM_SVE2);
             return new KernelBuilderImpl<IDISA_ARM_SVE2_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
