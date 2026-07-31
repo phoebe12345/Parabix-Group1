@@ -89,7 +89,8 @@ CPUDriver::CPUDriver(std::string && moduleName)
     }
     builder.setMAttrs(attrs);
 
-    mTarget.reset(builder.selectTarget(Triple(sys::getProcessTriple()), "", "", attrs));
+    SmallVector<std::string, 8> attrsVec(attrs.begin(), attrs.end());
+    mTarget.reset(builder.selectTarget(Triple(sys::getProcessTriple()), "", "", attrsVec)); 
     if (mTarget == nullptr) {
         throw std::runtime_error("Could not selectTarget");
     }
