@@ -89,7 +89,7 @@ CPUDriver::CPUDriver(std::string && moduleName)
     }
     builder.setMAttrs(attrs);
 
-    mTarget.reset(builder.selectTarget());
+    mTarget.reset(builder.selectTarget(Triple(sys::getProcessTriple()), "", "", attrs));
     if (mTarget == nullptr) {
         throw std::runtime_error("Could not selectTarget");
     }
