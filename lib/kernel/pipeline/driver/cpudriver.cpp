@@ -89,8 +89,21 @@ CPUDriver::CPUDriver(std::string && moduleName)
     }
     builder.setMAttrs(attrs);
 
+    // NOTE: selectTarget() with no arguments internally uses
+    // sys::getHostCPUName() to identify a specific, named CPU model and
+    // look up its default feature set from LLVM's built-in table. That
+    // lookup silently fails on emulated CPUs whose reported model name
+    // isn't in LLVM's table (confirmed under QEMU's "-cpu max"), which
+    // meant the JIT was never actually told this target supports SVE2 -
+    // even though our own ARM_available()/SVE2_available() checks
+    // (which read feature flags directly, not the CPU model name)
+    // correctly detected it.
+    //
+    // Passing the explicit feature list here instead - the same list
+    // already built from the direct feature-flag method above - bypasses
+    // the fragile CPU-name lookup entirely.
     SmallVector<std::string, 8> attrsVec(attrs.begin(), attrs.end());
-    mTarget.reset(builder.selectTarget(Triple(sys::getProcessTriple()), "", "", attrsVec)); 
+    mTarget.reset(builder.selectTarget(Triple(sys::getProcessTriple()), "", "", attrsVec));
     if (mTarget == nullptr) {
         throw std::runtime_error("Could not selectTarget");
     }
@@ -196,7 +209,22 @@ void * CPUDriver::finalizeObject(kernel::Kernel * const pk) {
     auto addModules = [&](const ModuleSet & S, const CodeGenOptLevel level) {
         if (S.empty()) return;
         mEngine->getTargetMachine()->setOptLevel(level);
+        // NOTE: knowing the target machine supports SVE2 isn't enough on
+        // its own - LLVM's instruction selector also requires each
+        // individual function to be explicitly tagged with the same
+        // feature/cpu strings, or it refuses to select SVE2-only
+        // instructions (this is what caused "Cannot select: intrinsic
+        // llvm.aarch64.sve.compact" even after selectTarget() was fixed
+        // above). Pulling the exact strings from mTarget itself, rather
+        // than rebuilding them by hand, keeps this in sync with whatever
+        // selectTarget() actually resolved.
+        const std::string featStr = mTarget->getTargetFeatureString().str();
+        const std::string cpuStr = mTarget->getTargetCPU().str();
         for (Module * M : S) {
+            for (Function & F : *M) {
+                F.addFnAttr("target-features", featStr);
+                F.addFnAttr("target-cpu", cpuStr);
+            }
             mEngine->addModule(std::unique_ptr<Module>(M));
         }
         mEngine->finalizeObject();
@@ -308,4 +336,3 @@ bool CPUDriver::hasExternalFunction(llvm::StringRef functionName) const {
 CPUDriver::~CPUDriver() {
 
 }
-
