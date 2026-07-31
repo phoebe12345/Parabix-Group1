@@ -198,4 +198,4 @@ KernelBuilder * GetIDISA_GPU_Builder(llvm::LLVMContext & C) {
     return new KernelBuilderImpl<IDISA_NVPTX20_Builder>(C, 64 * 64, 64);
 }
 #endif
-}
+} 
