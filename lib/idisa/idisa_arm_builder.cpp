@@ -169,22 +169,46 @@ Value * IDISA_ARM_Builder::mvmd_shuffle2(unsigned fw, Value * table0, Value * ta
     return IDISA_Builder::mvmd_shuffle2(fw, table0, table1, index_vector);
 }
 
+// Turns a fieldCount-bit mask (one bit per fw-wide field) into a 16-bit
+// byte-mask, using a single vector broadcast instead of a scalar
+// dependency chain. Prof. Cameron flagged the earlier version - a loop
+// that OR'd into one scalar register up to 16 times in a row - since each
+// step had to wait for the previous one to finish, with no parallelism
+// possible at all. This version instead builds a small per-field boolean
+// vector (fieldCount lanes, same pattern already used elsewhere in this
+// file), then uses one TBL gather to broadcast each field's flag out to
+// every byte it covers in parallel, and packs the result back into a
+// scalar mask with hsimd_signmask.
+//
+// Shared by both mvmd_compress and mvmd_expand, on both NEON and SVE2
+// (the SVE2 builder inherits this unchanged) - fixing it here fixes the
+// same performance issue on both.
 Value * IDISA_ARM_Builder::expandFieldMaskToBytes(Value * select_mask, unsigned fw) {
     const unsigned fieldCount = 128 / fw;      // 8, 4, or 2 for fw=16/32/64
     const unsigned bytesPerField = fw / 8;     // 2, 4, or 8
+    FixedVectorType * v16xi8Ty = FixedVectorType::get(getInt8Ty(), 16);
+
     Value * mask = CreateZExtOrTrunc(select_mask, getIntNTy(fieldCount));
-    Value * byteMask = ConstantInt::get(getInt16Ty(), 0);
+    Value * perField = UndefValue::get(v16xi8Ty);
     for (unsigned j = 0; j < fieldCount; j++) {
         Value * bit = CreateAnd(CreateLShr(mask, ConstantInt::get(getIntNTy(fieldCount), j)),
                                  ConstantInt::get(getIntNTy(fieldCount), 1));
-        Value * bit16 = CreateZExt(bit, getInt16Ty());
-        for (unsigned k = 0; k < bytesPerField; k++) {
-            unsigned destBit = j * bytesPerField + k;
-            Value * shifted = CreateShl(bit16, ConstantInt::get(getInt16Ty(), destBit));
-            byteMask = CreateOr(byteMask, shifted);
-        }
+        Value * isSet = CreateICmpNE(bit, ConstantInt::get(getIntNTy(fieldCount), 0));
+        Value * asByte = CreateSExt(isSet, getInt8Ty()); // 0xFF or 0x00
+        perField = CreateInsertElement(perField, asByte, ConstantInt::get(getInt32Ty(), j));
     }
-    return byteMask;
+
+    // Destination byte i reads from field (i / bytesPerField) - a
+    // compile-time constant index vector, so this whole step is one
+    // parallel gather instead of a loop.
+    Constant * idxs[16];
+    for (unsigned i = 0; i < 16; i++) {
+        idxs[i] = getInt8(i / bytesPerField);
+    }
+    Value * broadcastIdx = ConstantVector::get(ArrayRef<Constant *>(idxs, 16));
+    Value * byteMaskVec = mvmd_shuffle(8, perField, broadcastIdx);
+
+    return CreateZExtOrTrunc(hsimd_signmask(8, byteMaskVec), getInt16Ty());
 }
 
 // raw TBL1: indexes >= 16 yield zero lanes, unlike mvmd_shuffle which reduces them mod 16
