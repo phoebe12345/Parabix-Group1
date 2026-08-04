@@ -33,6 +33,7 @@ public:
     ~IDISA_ARM_Builder() {}
 
 protected:
+    llvm::Value * byteMaskToLaneMask(llvm::Value * byteMask);
     llvm::Value * tbl1(llvm::Value * table, llvm::Value * index_vector);
     llvm::Value * compressBytes(llvm::Value * a, llvm::Value * byteMask);
     llvm::Value * expandBytes(llvm::Value * a, llvm::Value * byteMask);

@@ -114,9 +114,8 @@ Value * IDISA_ARM_SVE2_Builder::mvmd_compress(unsigned fw, Value * a, Value * se
 // caused a real, hard-to-find bug. Building the same assumption into a
 // second, untested implementation would be repeating a known mistake.
 //
-// NOTE: as of this writing, this function has not yet been executed on
-// real or emulated SVE2 hardware - only mvmd_compress has been tested so
-// far. Test this explicitly before treating it as verified.
+// Executed under emulation on 2026-08-04, all 16-bit masks at fw 8/16/32/64,
+// at a 128-bit block width only. Untested above 128 bits.
 Value * IDISA_ARM_SVE2_Builder::mvmd_expand(unsigned fw, Value * a, Value * select_mask) {
     if (mBitBlockWidth == 128 && (fw == 8 || fw == 16 || fw == 32 || fw == 64)) {
         const unsigned fieldCount = 16;
@@ -124,30 +123,18 @@ Value * IDISA_ARM_SVE2_Builder::mvmd_expand(unsigned fw, Value * a, Value * sele
         auto * fixed16xi8Ty = FixedVectorType::get(i8Ty, fieldCount);
         auto * scalable16xi8Ty = ScalableVectorType::get(i8Ty, 16);
 
-        // Per-lane "is output position j selected" boolean, built with
-        // scalar bit tests rather than a vector-wide op (see mvmd_compress
-        // above for why).
-        //
         // fw==8 uses select_mask directly; fw==16/32/64 expand the
         // field-level mask to byte granularity first, same as
         // mvmd_compress above and NEON's own widening.
         Value * maskBits = (fw == 8) ? CreateZExtOrTrunc(select_mask, getInt16Ty())
                                       : expandFieldMaskToBytes(select_mask, fw);
-        Value * selectedBytes = UndefValue::get(fixed16xi8Ty);
-        for (unsigned i = 0; i < fieldCount; i++) {
-            Value * bit = CreateAnd(CreateLShr(maskBits, ConstantInt::get(getInt16Ty(), i)),
-                                     ConstantInt::get(getInt16Ty(), 1));
-            Value * isSelBit = CreateICmpNE(bit, ConstantInt::get(getInt16Ty(), 0));
-            Value * asByte = CreateSExt(isSelBit, i8Ty); // 0xFF or 0x00
-            selectedBytes = CreateInsertElement(selectedBytes, asByte, ConstantInt::get(getInt32Ty(), i));
-        }
-        Value * isSelected = CreateICmpNE(selectedBytes, ConstantAggregateZero::get(fixed16xi8Ty));
+        Value * isSelected = byteMaskToLaneMask(maskBits);
 
         // Exclusive prefix sum: rank[j] = number of selected positions
         // strictly before lane j. hsimd_partial_sum is inherited from the
         // generic IDISA_Builder base (the ARM builder doesn't override it),
         // so this is the exact same call NEON's mvmd_expand makes.
-        Value * ones = CreateLShr(selectedBytes, getSplat(fieldCount, getInt8(7)));
+        Value * ones = CreateZExt(isSelected, fixed16xi8Ty);
         Value * inclusiveRank = hsimd_partial_sum(8, ones);
         Value * rank = simd_sub(8, inclusiveRank, ones);
 
