@@ -17,7 +17,9 @@ namespace {
 
 llvm::GlobalVariable * getOrCreateByteCompressTable(llvm::Module * mod, llvm::LLVMContext & C) {
     const char * const name = "__idisa_arm_byte_compress_table";
-    if (llvm::GlobalVariable * existing = mod->getGlobalVariable(name)) {
+    // AllowInternal, or the lookup never matches a private global and every
+    // call site gets its own 4KB copy of the table.
+    if (llvm::GlobalVariable * existing = mod->getGlobalVariable(name, true)) {
         return existing;
     }
     llvm::IntegerType * i8Ty = llvm::IntegerType::getInt8Ty(C);
