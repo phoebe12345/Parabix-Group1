@@ -13,15 +13,26 @@ if [ ! -f mask_sweep_a ] || [ ! -f mask_sweep_b ]; then
 fi
 
 failures=0
+crashes=0
 for op in mvmd_compress mvmd_expand; do
     for fw in 8 16 32 64; do
-        if "$idisa_test" -q $op $fw mask_sweep_a mask_sweep_b; then
+        "$idisa_test" -q $op $fw mask_sweep_a mask_sweep_b
+        status=$?
+        # A signal death and a wrong answer are different problems. Reporting
+        # both as FAIL makes an intermittent crash read as a correctness bug.
+        if [ $status -eq 0 ]; then
             echo "PASS: $op fw=$fw"
+        elif [ $status -ge 128 ]; then
+            echo "CRASH: $op fw=$fw (signal $((status - 128)), not a wrong result)"
+            crashes=$((crashes + 1))
         else
-            echo "FAIL: $op fw=$fw"
+            echo "FAIL: $op fw=$fw (wrong result)"
             failures=$((failures + 1))
         fi
     done
 done
 
-exit $failures
+if [ $crashes -gt 0 ]; then
+    echo "$crashes crashed, $failures gave wrong results"
+fi
+exit $((failures + crashes))
