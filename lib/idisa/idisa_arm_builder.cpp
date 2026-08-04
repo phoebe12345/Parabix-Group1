@@ -205,6 +205,25 @@ Value * IDISA_ARM_Builder::expandFieldMaskToBytes(Value * select_mask, unsigned 
     return CreateZExtOrTrunc(hsimd_signmask(8, CreateSExt(isSet, v16xi8Ty)), getInt16Ty());
 }
 
+// One lane per bit of a 16-bit byte mask. Lanes 0-7 read the low half of the
+// mask and 8-15 the high half, so no lane waits on another. A chain of
+// InsertElement, or a store to a stack slot, serialises all 16 steps.
+Value * IDISA_ARM_Builder::byteMaskToLaneMask(Value * byteMask) {
+    FixedVectorType * v16xi8Ty = FixedVectorType::get(getInt8Ty(), 16);
+    Value * maskPair = CreateBitCast(CreateZExtOrTrunc(byteMask, getInt16Ty()),
+                                     FixedVectorType::get(getInt8Ty(), 2));
+    SmallVector<int, 16> halfIdx(16);
+    Constant * sel[16];
+    for (unsigned i = 0; i < 16; i++) {
+        halfIdx[i] = i / 8;
+        sel[i] = getInt8(1u << (i % 8));
+    }
+    Value * spread = CreateShuffleVector(maskPair, maskPair, halfIdx);
+    Value * selVec = ConstantVector::get(ArrayRef<Constant *>(sel, 16));
+    return CreateICmpNE(fwCast(8, simd_and(spread, selVec)),
+                        ConstantAggregateZero::get(v16xi8Ty));
+}
+
 // raw TBL1: indexes >= 16 yield zero lanes, unlike mvmd_shuffle which reduces them mod 16
 Value * IDISA_ARM_Builder::tbl1(Value * table, Value * index_vector) {
     Function * fn = Intrinsic::getDeclaration(getModule(), Intrinsic::aarch64_neon_tbl1,
@@ -267,23 +286,7 @@ Value * IDISA_ARM_Builder::expandBytes(Value * a, Value * byteMask) {
     const unsigned fieldCount = 16;
     FixedVectorType * v16xi8Ty = FixedVectorType::get(getInt8Ty(), fieldCount);
 
-    // Lanes 0-7 read the low half of the mask and 8-15 the high half, then each
-    // lane tests its own bit. The previous version stored 16 bytes to a stack
-    // slot and read them back; that alloca is not in the entry block, so it is
-    // never promoted and the traffic stays in the block loop.
-    Value * maskPair = CreateBitCast(CreateZExtOrTrunc(byteMask, getInt16Ty()),
-                                     FixedVectorType::get(getInt8Ty(), 2));
-    SmallVector<int, 16> halfIdx(fieldCount);
-    Constant * sel[16];
-    for (unsigned i = 0; i < fieldCount; i++) {
-        halfIdx[i] = i / 8;
-        sel[i] = getInt8(1u << (i % 8));
-    }
-    Value * spread = CreateShuffleVector(maskPair, maskPair, halfIdx);
-    Value * selVec = ConstantVector::get(ArrayRef<Constant *>(sel, fieldCount));
-    Value * isSelected = CreateICmpNE(fwCast(8, simd_and(spread, selVec)),
-                                      ConstantAggregateZero::get(v16xi8Ty));
-
+    Value * isSelected = byteMaskToLaneMask(byteMask);
     Value * ones = CreateZExt(isSelected, v16xi8Ty);
     Value * inclusiveRank = hsimd_partial_sum(8, ones);
     Value * rank = simd_sub(8, inclusiveRank, ones);
