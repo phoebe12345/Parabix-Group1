@@ -532,9 +532,8 @@ Value * IDISA_Builder::simd_sllv(unsigned fw, Value * v, Value * shifts) {
     if (fw == 4 && getVectorBitWidth(v) == 128) {
         // Fast path for 4-bit fields: two byte-lane shifts plus masking to
         // keep bits from crossing the nibble boundary, instead of the
-        // generic doubling loop below. This is portable - no
-        // architecture-specific intrinsics - so every target benefits,
-        // not just the one it was first written for.
+        // generic doubling loop below. No architecture-specific intrinsics,
+        // but the 128-bit guard means AVX2 and AVX512 never reach it.
         auto splat8 = [&](uint8_t x) { return getSplat(16, getInt8(x)); };
         Value * loData = simd_and(v, splat8(0x0F));
         Value * hiData = simd_and(v, splat8(0xF0));
