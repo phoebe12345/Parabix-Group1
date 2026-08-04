@@ -184,31 +184,23 @@ Value * IDISA_ARM_Builder::mvmd_shuffle2(unsigned fw, Value * table0, Value * ta
 // (the SVE2 builder inherits this unchanged) - fixing it here fixes the
 // same performance issue on both.
 Value * IDISA_ARM_Builder::expandFieldMaskToBytes(Value * select_mask, unsigned fw) {
-    const unsigned fieldCount = 128 / fw;      // 8, 4, or 2 for fw=16/32/64
-    const unsigned bytesPerField = fw / 8;     // 2, 4, or 8
+    const unsigned bytesPerField = fw / 8;     // 2, 4, or 8 for fw=16/32/64
     FixedVectorType * v16xi8Ty = FixedVectorType::get(getInt8Ty(), 16);
 
-    Value * mask = CreateZExtOrTrunc(select_mask, getIntNTy(fieldCount));
-    Value * perField = UndefValue::get(v16xi8Ty);
-    for (unsigned j = 0; j < fieldCount; j++) {
-        Value * bit = CreateAnd(CreateLShr(mask, ConstantInt::get(getIntNTy(fieldCount), j)),
-                                 ConstantInt::get(getIntNTy(fieldCount), 1));
-        Value * isSet = CreateICmpNE(bit, ConstantInt::get(getIntNTy(fieldCount), 0));
-        Value * asByte = CreateSExt(isSet, getInt8Ty()); // 0xFF or 0x00
-        perField = CreateInsertElement(perField, asByte, ConstantInt::get(getInt32Ty(), j));
-    }
-
-    // Destination byte i reads from field (i / bytesPerField) - a
-    // compile-time constant index vector, so this whole step is one
-    // parallel gather instead of a loop.
-    Constant * idxs[16];
+    // Every lane tests its own bit of a broadcast copy of the mask, so no lane
+    // waits on another. Assembling the vector lane by lane instead would build
+    // a dependency chain as long as the field count.
+    // fw >= 16 here, so the field count is at most 8 and every selector fits in a byte.
+    Value * splat = fwCast(8, simd_fill(8, CreateZExtOrTrunc(select_mask, getInt8Ty())));
+    Constant * sel[16];
     for (unsigned i = 0; i < 16; i++) {
-        idxs[i] = getInt8(i / bytesPerField);
+        sel[i] = getInt8(1u << (i / bytesPerField));
     }
-    Value * broadcastIdx = ConstantVector::get(ArrayRef<Constant *>(idxs, 16));
-    Value * byteMaskVec = mvmd_shuffle(8, perField, broadcastIdx);
+    Value * selVec = ConstantVector::get(ArrayRef<Constant *>(sel, 16));
+    Value * isSet = CreateICmpNE(fwCast(8, simd_and(splat, selVec)),
+                                 ConstantAggregateZero::get(v16xi8Ty));
 
-    return CreateZExtOrTrunc(hsimd_signmask(8, byteMaskVec), getInt16Ty());
+    return CreateZExtOrTrunc(hsimd_signmask(8, CreateSExt(isSet, v16xi8Ty)), getInt16Ty());
 }
 
 // raw TBL1: indexes >= 16 yield zero lanes, unlike mvmd_shuffle which reduces them mod 16
@@ -273,22 +265,24 @@ Value * IDISA_ARM_Builder::expandBytes(Value * a, Value * byteMask) {
     const unsigned fieldCount = 16;
     FixedVectorType * v16xi8Ty = FixedVectorType::get(getInt8Ty(), fieldCount);
 
-    Value * maskBits = byteMask;
-
-    Value * selectedBytesBuf = CreateAlloca(v16xi8Ty);
+    // Lanes 0-7 read the low half of the mask and 8-15 the high half, then each
+    // lane tests its own bit. The previous version stored 16 bytes to a stack
+    // slot and read them back; that alloca is not in the entry block, so it is
+    // never promoted and the traffic stays in the block loop.
+    Value * maskPair = CreateBitCast(CreateZExtOrTrunc(byteMask, getInt16Ty()),
+                                     FixedVectorType::get(getInt8Ty(), 2));
+    SmallVector<int, 16> halfIdx(fieldCount);
+    Constant * sel[16];
     for (unsigned i = 0; i < fieldCount; i++) {
-        Value * bit = CreateAnd(CreateLShr(maskBits, ConstantInt::get(getInt16Ty(), i)),
-                                 ConstantInt::get(getInt16Ty(), 1));
-        Value * isSelBit = CreateICmpNE(bit, ConstantInt::get(getInt16Ty(), 0));
-        Value * asByte = CreateSExt(isSelBit, getInt8Ty()); // 0xFF or 0x00
-        Value * bytePtr = CreateGEP(getInt8Ty(), CreateBitCast(selectedBytesBuf, getInt8Ty()->getPointerTo()),
-                                     ConstantInt::get(getInt32Ty(), i));
-        CreateStore(asByte, bytePtr);
+        halfIdx[i] = i / 8;
+        sel[i] = getInt8(1u << (i % 8));
     }
-    Value * selectedBytes = CreateLoad(v16xi8Ty, selectedBytesBuf);
-    Value * isSelected = CreateICmpNE(selectedBytes, fwCast(8, allZeroes()));
+    Value * spread = CreateShuffleVector(maskPair, maskPair, halfIdx);
+    Value * selVec = ConstantVector::get(ArrayRef<Constant *>(sel, fieldCount));
+    Value * isSelected = CreateICmpNE(fwCast(8, simd_and(spread, selVec)),
+                                      ConstantAggregateZero::get(v16xi8Ty));
 
-    Value * ones = CreateLShr(selectedBytes, getSplat(fieldCount, getInt8(7)));
+    Value * ones = CreateZExt(isSelected, v16xi8Ty);
     Value * inclusiveRank = hsimd_partial_sum(8, ones);
     Value * rank = simd_sub(8, inclusiveRank, ones);
 
