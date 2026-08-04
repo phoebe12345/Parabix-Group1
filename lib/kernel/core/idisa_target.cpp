@@ -59,6 +59,7 @@ Features getHostCPUFeatures(const StringMap<bool> & features) {
     return hostCPUFeatures;
 }
 
+#ifdef PARABIX_ARM_TARGET
 // getHostCPUFeatures changed signature in LLVM 19.
 static bool getHostFeatures(StringMap<bool> & features) {
 #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(19, 0, 0)
@@ -69,17 +70,8 @@ static bool getHostFeatures(StringMap<bool> & features) {
 #endif
 }
 
-// getHostCPUFeatures is unimplemented on Darwin/AArch64 and returns an empty
-// map, so the model lookup (added in d02f0e0b for apple-m1) is still needed.
-// The flag path is the one that works under QEMU, whose CPU name is not in
-// LLVM's table. Neither covers both, so try both.
-bool ARM_available() {
-#ifdef PARABIX_ARM_TARGET
-    StringMap<bool> features;
-    if (getHostFeatures(features)) {
-        // "asimd" is the name Linux reports for NEON on AArch64.
-        if (features.lookup("asimd") || features.lookup("neon")) return true;
-    }
+// True if the host CPU model's default extension list contains ext.
+static bool cpuModelHasExtension(const char * ext) {
 #if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(16, 0, 0)
     std::vector<StringRef> extNames;
 #if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(17, 0, 0)
@@ -92,22 +84,39 @@ bool ARM_available() {
     llvm::AArch64::getExtensionFeatures(info.Arch.DefaultExts | info.DefaultExtensions, extNames);
 #endif
     for (const auto eName : extNames) {
-        if (eName == "+neon") return true;
+        if (eName == ext) return true;
     }
 #endif
+    return false;
+}
+#endif
+
+// getHostCPUFeatures is unimplemented on Darwin/AArch64 and returns an empty
+// map, so the model lookup (added in d02f0e0b for apple-m1) is still needed.
+// The flag path is the one that works under QEMU, whose CPU name is not in
+// LLVM's table. Neither covers both, so try both.
+bool ARM_available() {
+#ifdef PARABIX_ARM_TARGET
+    StringMap<bool> features;
+    if (getHostFeatures(features)) {
+        // "asimd" is the name Linux reports for NEON on AArch64.
+        if (features.lookup("asimd") || features.lookup("neon")) return true;
+    }
+    return cpuModelHasExtension("+neon");
 #endif
     return false;
 }
 
-// No model-lookup fallback: the flag path covers Linux and QEMU, and Apple
-// Silicon genuinely has no SVE2.
+// Same two-path shape as ARM_available. Without the fallback, a host whose flag
+// path fails still gets NEON through the model table while this returns false,
+// which silently downgrades a real SVE2 machine.
 bool SVE2_available() {
 #ifdef PARABIX_ARM_TARGET
     StringMap<bool> features;
-    if (!getHostFeatures(features)) {
-        return false;
+    if (getHostFeatures(features) && features.lookup("sve2")) {
+        return true;
     }
-    return features.lookup("sve2");
+    return cpuModelHasExtension("+sve2");
 #endif
     return false;
 }
