@@ -59,31 +59,52 @@ Features getHostCPUFeatures(const StringMap<bool> & features) {
     return hostCPUFeatures;
 }
 
-// NOTE: previously this used llvm::AArch64::parseCpu(sys::getHostCPUName())
-// to look up a known CPU model's default extension list. That approach
-// silently fails (returns an empty/false result) on emulated CPUs whose
-// reported model name isn't in LLVM's built-in table - confirmed this is
-// exactly what happens under QEMU's "-cpu max", which reports a synthetic
-// CPU identity. Reading the feature flags directly, the same mechanism
-// "lscpu" itself uses, works correctly on both real and emulated hardware,
-// since it doesn't depend on recognizing the CPU model at all.
+// getHostCPUFeatures changed signature in LLVM 19.
+static bool getHostFeatures(StringMap<bool> & features) {
+#if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(19, 0, 0)
+    return sys::getHostCPUFeatures(features);
+#else
+    features = sys::getHostCPUFeatures();
+    return !features.empty();
+#endif
+}
+
+// getHostCPUFeatures is unimplemented on Darwin/AArch64 and returns an empty
+// map, so the model lookup (added in d02f0e0b for apple-m1) is still needed.
+// The flag path is the one that works under QEMU, whose CPU name is not in
+// LLVM's table. Neither covers both, so try both.
 bool ARM_available() {
 #ifdef PARABIX_ARM_TARGET
     StringMap<bool> features;
-    if (LLVM_UNLIKELY(!sys::getHostCPUFeatures(features))) {
-        return false;
+    if (getHostFeatures(features)) {
+        // "asimd" is the name Linux reports for NEON on AArch64.
+        if (features.lookup("asimd") || features.lookup("neon")) return true;
     }
-    // "asimd" is the flag name Linux/LLVM report for NEON on AArch64;
-    // checking "neon" too in case that naming differs on some targets.
-    return features.lookup("asimd") || features.lookup("neon");
+#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(16, 0, 0)
+    std::vector<StringRef> extNames;
+#if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(17, 0, 0)
+    auto info = llvm::AArch64::parseCpu(sys::getHostCPUName());
+    if (info) {
+        llvm::AArch64::getExtensionFeatures(info->Arch.DefaultExts | info->DefaultExtensions, extNames);
+    }
+#else
+    const llvm::AArch64::CpuInfo & info = llvm::AArch64::parseCpu(sys::getHostCPUName());
+    llvm::AArch64::getExtensionFeatures(info.Arch.DefaultExts | info.DefaultExtensions, extNames);
+#endif
+    for (const auto eName : extNames) {
+        if (eName == "+neon") return true;
+    }
+#endif
 #endif
     return false;
 }
 
+// No model-lookup fallback: the flag path covers Linux and QEMU, and Apple
+// Silicon genuinely has no SVE2.
 bool SVE2_available() {
 #ifdef PARABIX_ARM_TARGET
     StringMap<bool> features;
-    if (LLVM_UNLIKELY(!sys::getHostCPUFeatures(features))) {
+    if (!getHostFeatures(features)) {
         return false;
     }
     return features.lookup("sve2");
@@ -126,15 +147,19 @@ KernelBuilder * GetIDISA_Builder(llvm::LLVMContext & C, const StringMap<bool> & 
     if (LLVM_LIKELY(codegen::BlockSize == 0)) {  // No BlockSize override: use processor SIMD width
         codegen::BlockSize = 128;
     }
-    //llvm::errs() << "[debug] ARM_available() = " << ARM_available() << "\n";
     if (ARM_available()) {
-        //llvm::errs() << "[debug] SVE2_available() = " << SVE2_available() << "\n";
         if (SVE2_available()) {
             featureSet.set((size_t)Feature::ARM_SVE2);
             return new KernelBuilderImpl<IDISA_ARM_SVE2_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
         }
         return new KernelBuilderImpl<IDISA_ARM_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
     }
+    // NEON is mandatory in ARMv8-A, so reaching here means detection failed.
+    // The scalar fallback is still correct, so this degrades silently and the
+    // test suite keeps passing without exercising any ARM code.
+    llvm::errs() << "WARNING: built for ARM but NEON was not detected. "
+                    "Falling back to a non-SIMD builder; ARM code paths will "
+                    "not be exercised and timings will not be meaningful.\n";
 #endif
 #ifdef PARABIX_X86_TARGET
 
