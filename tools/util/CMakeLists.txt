@@ -66,3 +66,20 @@ DEPS
     re.parse
 )
 
+
+parabix_add_executable(
+NAME
+    ucompact
+SRC
+    ucompact.cpp
+DEPS
+    kernel.basis
+    kernel.io
+    kernel.pipeline
+    kernel.streamutils
+    kernel.unicode
+    kernel.util
+    toolchain
+    re.cc
+    re.parse
+)
