@@ -29,9 +29,13 @@
 #include <llvm/ADT/Triple.h>
 #endif
 
+#include <llvm/Support/CommandLine.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
 #include <kernel/core/kernel_builder.h>
+
+#include <cstdlib>
+#include <cstring>
 
 #if LLVM_VERSION_INTEGER >= LLVM_VERSION_CODE(17, 0, 0)
 #include <llvm/TargetParser/Host.h>
@@ -121,6 +125,19 @@ bool SVE2_available() {
     return false;
 }
 
+// FEAT_SVE_BitPerm is optional on SVE2, so BEXT and BDEP need a check of their
+// own. Two spellings because the kernel flag and the LLVM feature name differ.
+bool SVE2_BitPerm_available() {
+#ifdef PARABIX_ARM_TARGET
+    StringMap<bool> features;
+    if (getHostFeatures(features)) {
+        if (features.lookup("sve2-bitperm") || features.lookup("svebitperm")) return true;
+    }
+    return cpuModelHasExtension("+sve2-bitperm");
+#endif
+    return false;
+}
+
 bool AVX2_available() {
     #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(19, 0, 0)
     StringMap<bool> features;
@@ -145,22 +162,100 @@ bool AVX512BW_available() {
     return features.lookup("avx512bw");
 }
 
+// Benchmark-only switches. Each one turns a single native override off so an A/B can
+// measure it against the generic path from one binary. They are folded into the ARM
+// builders' unique names, so the two arms never share an object cache entry.
+static cl::opt<bool> BenchGenericCompress("bench-generic-compress",
+    cl::desc("BENCHMARK ONLY: disable native mvmd_compress; run the generic path."),
+    cl::init(false), cl::cat(codegen::CodeGenOptions));
+
+static cl::opt<bool> BenchGenericExpand("bench-generic-expand",
+    cl::desc("BENCHMARK ONLY: disable native mvmd_expand; run the generic path."),
+    cl::init(false), cl::cat(codegen::CodeGenOptions));
+
+static cl::opt<bool> BenchGenericShift2("bench-generic-shift2",
+    cl::desc("BENCHMARK ONLY: disable the fw=2 simd_sllv/simd_srlv override."),
+    cl::init(false), cl::cat(codegen::CodeGenOptions));
+
+static cl::opt<bool> BenchGenericShift4("bench-generic-shift4",
+    cl::desc("BENCHMARK ONLY: disable the fw=4 simd_sllv/simd_srlv fast path."),
+    cl::init(false), cl::cat(codegen::CodeGenOptions));
+
+static cl::opt<bool> BenchGenericBitperm("bench-generic-bitperm",
+    cl::desc("BENCHMARK ONLY: disable SVE2 BEXT/BDEP; run the generic simd_pext/simd_pdep."),
+    cl::init(false), cl::cat(codegen::CodeGenOptions));
+
 namespace IDISA {
 
 KernelBuilder * GetIDISA_Builder(llvm::LLVMContext & C, const StringMap<bool> & features) {
     IDISA_Builder::FeatureSet featureSet;
+    const bool anyBench = BenchGenericCompress || BenchGenericExpand
+                        || BenchGenericShift2 || BenchGenericShift4
+                        || BenchGenericBitperm;
+    // Only the ARM builders fold these bits into getBuilderUniqueName. On any other
+    // builder the two arms would share a cache key and serve each other stale kernels.
+    auto rejectBenchOptions = [&]() {
+        if (LLVM_UNLIKELY(anyBench)) {
+            report_fatal_error(StringRef("bench-generic-* options are only valid for the ARM and "
+                                         "ARM_SVE2 builders; the selected builder does not encode "
+                                         "them in its unique name and would poison the object cache."));
+        }
+    };
+    auto setBenchFeatures = [&]() {
+        if (BenchGenericCompress) featureSet.set((size_t)Feature::BENCH_GENERIC_COMPRESS);
+        if (BenchGenericExpand)   featureSet.set((size_t)Feature::BENCH_GENERIC_EXPAND);
+        if (BenchGenericShift2)   featureSet.set((size_t)Feature::BENCH_GENERIC_SHIFT2);
+        if (BenchGenericShift4)   featureSet.set((size_t)Feature::BENCH_GENERIC_SHIFT4);
+        if (BenchGenericBitperm)  featureSet.set((size_t)Feature::BENCH_GENERIC_BITPERM);
+    };
     if (codegen::BlockSize == 64) {
+        rejectBenchOptions();
         return new KernelBuilderImpl<IDISA_I64_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
     }
 #ifdef PARABIX_ARM_TARGET
     if (LLVM_LIKELY(codegen::BlockSize == 0)) {  // No BlockSize override: use processor SIMD width
         codegen::BlockSize = 128;
     }
+    // Feature detection reads /proc/cpuinfo, which under user-mode QEMU reports
+    // the host CPU rather than the emulated one. SVE2 is therefore invisible to
+    // detection there, even though the emulated CPU executes SVE2 correctly.
+    // This override selects a builder directly so the SVE2 path can be tested
+    // and measured without full-system emulation:
+    //
+    //     PARABIX_FORCE_BUILDER=ARM_SVE2 qemu-aarch64 -cpu max ./bin/idisa_test ...
+    //
+    // Forcing a builder the hardware does not implement will fault at run time.
+    // That is intended: this is a testing lever, not a fallback.
+    if (const char * const forced = std::getenv("PARABIX_FORCE_BUILDER")) {
+        if (*forced) {
+            llvm::errs() << "NOTE: PARABIX_FORCE_BUILDER=" << forced
+                         << " overrides CPU detection.\n";
+            if (std::strcmp(forced, "ARM_SVE2") == 0) {
+                featureSet.set((size_t)Feature::ARM_SVE2);
+                // Detection cannot see the emulated CPU, so BitPerm is assumed
+                // here too. PARABIX_EXTRA_MATTR must supply +sve2-bitperm.
+                featureSet.set((size_t)Feature::ARM_SVE2_BITPERM);
+                setBenchFeatures();
+                return new KernelBuilderImpl<IDISA_ARM_SVE2_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
+            }
+            if (std::strcmp(forced, "ARM") == 0) {
+                setBenchFeatures();
+                return new KernelBuilderImpl<IDISA_ARM_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
+            }
+            report_fatal_error(StringRef("PARABIX_FORCE_BUILDER: unknown builder '") + forced
+                               + "'; expected ARM or ARM_SVE2");
+        }
+    }
     if (ARM_available()) {
         if (SVE2_available()) {
             featureSet.set((size_t)Feature::ARM_SVE2);
+            if (SVE2_BitPerm_available()) {
+                featureSet.set((size_t)Feature::ARM_SVE2_BITPERM);
+            }
+            setBenchFeatures();
             return new KernelBuilderImpl<IDISA_ARM_SVE2_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
         }
+        setBenchFeatures();
         return new KernelBuilderImpl<IDISA_ARM_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
     }
     // NEON is mandatory in ARMv8-A, so reaching here means detection failed.
@@ -170,6 +265,8 @@ KernelBuilder * GetIDISA_Builder(llvm::LLVMContext & C, const StringMap<bool> & 
                     "Falling back to a non-SIMD builder; ARM code paths will "
                     "not be exercised and timings will not be meaningful.\n";
 #endif
+    // Every remaining path selects a non-ARM builder, none of which encode the bench bits.
+    rejectBenchOptions();
 #ifdef PARABIX_X86_TARGET
 
     const auto HasAVX = features.lookup("avx");

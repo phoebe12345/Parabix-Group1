@@ -20,6 +20,9 @@
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/CommandLine.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringRef.h>
+#include <cstdlib>
 
 #if LLVM_VERSION_INTEGER < LLVM_VERSION_CODE(7, 0, 0)
 #define OF_None F_None
@@ -85,6 +88,24 @@ CPUDriver::CPUDriver(std::string && moduleName)
     for (auto & flag : features) {
         if (flag.second) {
             attrs.push_back("+" + flag.first().str());
+        }
+    }
+    // Companion to PARABIX_FORCE_BUILDER (see idisa_target.cpp). The feature
+    // list above describes the *host* CPU, so under user-mode QEMU the JIT is
+    // never told the emulated CPU has SVE2, and instruction selection fails
+    // with "Cannot select: intrinsic llvm.aarch64.sve.compact". Appending the
+    // features explicitly makes the emulated target testable:
+    //
+    //     PARABIX_EXTRA_MATTR=+sve2,+sve2-bitperm
+    if (const char * const extra = std::getenv("PARABIX_EXTRA_MATTR")) {
+        SmallVector<StringRef, 8> parts;
+        StringRef(extra).split(parts, ',', -1, false);
+        for (StringRef p : parts) {
+            const auto t = p.trim();
+            if (!t.empty()) attrs.push_back(t.str());
+        }
+        if (!parts.empty()) {
+            llvm::errs() << "NOTE: PARABIX_EXTRA_MATTR adds target features: " << extra << "\n";
         }
     }
     builder.setMAttrs(attrs);
