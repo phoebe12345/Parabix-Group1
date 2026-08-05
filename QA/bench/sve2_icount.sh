@@ -1,26 +1,14 @@
 #!/usr/bin/env bash
 #
-# D4: SVE2 evidence. Static instruction counts per kernel, nothing else.
-#
-# This script never reports a time, a speed or a speedup. The M4 Pro implements no SVE,
-# so SVE2 code cannot execute natively on the benchmark host. Under qemu-user the
-# results and the instruction counts are correct, but wall time and CNTVCT_EL0 are
-# meaningless. Every number here is an instruction count and is labelled as one.
+# D4: static SVE2 instruction counts per kernel under qemu-user.
+# Emulated wall time and CNTVCT_EL0 values are not recorded.
 #
 # Run inside the QA/sve2 container:
 #   docker build -t parabix-sve2 QA/sve2
 #   docker run --rm -v "$PWD:/src" parabix-sve2 ./QA/bench/sve2_icount.sh
 #
-# -ShowASM is the only evidence channel. It disables the object cache, which makes this
-# channel structurally immune to the PARABIX_EXTRA_MATTR poisoning: that variable changes
-# emitted code but is absent from the cache key.
-#
-# Counting is done by classify_insns.awk, the same file the macOS side uses, so one
-# definition of "vector instruction" serves both platforms. It classifies by operand
-# register class rather than by a list of mnemonics, because and, orr, add, sub, lsl,
-# lsr and mov are scalar mnemonics as well as vector ones and an allow-list of those
-# counts loop bookkeeping as vector work. Vector and scalar are reported as two columns
-# so neither can be mistaken for the other.
+# -ShowASM bypasses the cache. classify_insns.awk provides the shared instruction
+# classification used by both native and emulated runs.
 #
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
@@ -50,8 +38,7 @@ slice_kernel() {
     ' "$asm"
 }
 
-# The counter must be proved on this host before any number it produces is written down,
-# exactly as prove_path.sh proves the eor.16b discriminator.
+# Validate the instruction classifier against a fixed assembly sample.
 counter_selftest() {
     local tmp got want
     tmp="$(mktemp)"
@@ -83,9 +70,7 @@ EOF
 counter_selftest
 
 # run_arm LABEL KERNEL OP FW --env ENV... -- --flags FLAG...
-# The environment prefix and the binary's own options are separate lists. Folding them
-# into one "$@" put every option before the binary, where qemu-aarch64 rejected it and
-# the arm silently vanished from the table.
+# Keep environment arguments separate from binary options.
 run_arm() {
     local label="$1" kernel="$2" op="$3" fw="$4"; shift 4
     local envp=() flags=() mode=""
@@ -132,8 +117,7 @@ COUNTS="$SESSION/icounts.csv"
 echo "arm,op,fw,vector_insns,scalar_insns,bext,bdep,compact,tbl" > "$COUNTS"
 EXPECTED="$SESSION/expected_arms.txt"
 : > "$EXPECTED"
-# Absences with a written-down cause. Anything absent and not named here is a defect in
-# this script, not in the code under test, and it aborts the run.
+# Known unsupported control arms.
 KNOWN_ABSENT="$SESSION/known_absent.txt"
 {
     echo "generic_expand_fw8 generic IDISA_Builder::mvmd_expand crashes below fw=64"
@@ -152,9 +136,7 @@ for fw in 8 16 32 64; do
         kern="${op}${fw}_test"
         emit "sve2_${short}_fw${fw}"; emit "generic_${short}_fw${fw}"; emit "neon_${short}_fw${fw}"
         run_arm "sve2_${short}_fw${fw}"    "$kern" "$op" "$fw" --env "${SVE2_ENV[@]}"
-        # The generic control answers "what does BEXT and BDEP buy over the bit-serial
-        # path". Without it the table degenerates into SVE2 versus NEON, a different
-        # question, and nothing in the printed table would say so.
+        # Compare SVE2 BitPerm with the generic bit-serial path.
         run_arm "generic_${short}_fw${fw}" "$kern" "$op" "$fw" --env "${SVE2_ENV[@]}" \
                 --flags -bench-generic-bitperm
         run_arm "neon_${short}_fw${fw}"    "$kern" "$op" "$fw" --env "${NEON_ENV[@]}"
@@ -176,9 +158,7 @@ echo "No speed, speedup or cycle figure can be derived from this table."
 echo "vector_insns is classified by operand register class, not by mnemonic."
 column -s, -t < "$COUNTS"
 
-# An unexplained missing arm is fatal, not a note. A control arm that silently drops out
-# turns the table into a comparison the reader did not ask for, and nothing in the table
-# would mark it.
+# Require every supported arm to appear in the output table.
 UNEXPLAINED="$(python3 - "$COUNTS" "$EXPECTED" "$KNOWN_ABSENT" <<'PY'
 import csv, sys
 have = {r["arm"] for r in csv.DictReader(open(sys.argv[1]))}
@@ -208,8 +188,7 @@ fi
 
 note "session directory: $SESSION"
 
-# A TCG instruction-count plugin was not confirmed present in this image. If it is
-# absent, this reports static counts only. Nothing is substituted for a missing number.
+# Dynamic counts require an explicitly configured TCG plugin.
 if [ -n "${QEMU_INSN_PLUGIN:-}" ] && [ -f "$QEMU_INSN_PLUGIN" ]; then
     note "TCG plugin $QEMU_INSN_PLUGIN present; dynamic counts are possible but are not implemented here"
 else

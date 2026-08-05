@@ -244,9 +244,7 @@ def main():
     if not s6:
         reasons.append("S6: session void, the cache prefix set or a kernel object changed mid-session")
 
-    # S7. The bench switches are global to the builder, so they can change the pipeline
-    # driver module as well as the timed kernel. A floor whose arms differ in a different
-    # structural way than the measured arms do is not a floor for this measurement.
+    # S7 requires matching pipeline and cache structure in the floor session.
     if args.is_null:
         s7 = True
     elif not args.expect_floor_signature:
@@ -366,9 +364,7 @@ def main():
     if args.attribution_wall is not None:
         print("  share of PROCESS  time in the measured kernels : %.4f" % args.attribution_wall)
 
-    # An end-to-end sentence needs the share of the whole process, never the share of
-    # the pipeline. The process spends time on start, cache load, mmap and teardown that
-    # the pipeline counter total does not see.
+    # End-to-end attribution uses process time, including setup and teardown.
     if args.scope == "process":
         if args.attribution_wall is None:
             print("  min resolvable end-to-end effect : unknown, no process-level attribution")

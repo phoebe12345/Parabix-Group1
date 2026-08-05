@@ -1,25 +1,7 @@
 #!/usr/bin/env bash
 #
-# R1 cross-check for the D1 headline number only.
-#
-# The protocol switches arms with a runtime flag inside one binary, because the stated
-# criterion is "same binary, same build flags, same input". The rejected alternative was
-# to switch arms by rebuilding. That alternative is cache-safe by construction, since a
-# rebuild rotates CACHE_PREFIX, so it is a good independent check on the switch.
-#
-# This builds a second tree with the fw=2 override deleted at source, measures the same
-# kernel, and compares the resulting ratio against the switch-based ratio.
-#
-# Every proof condition is derived, never asserted. The script proves that both binaries
-# selected an ARM builder, that they wrote under different cache prefixes, that their
-# kernels differ by md5 and by the eor.16b discriminator, and that both trees were
-# configured against the same LLVM. A cross-toolchain comparison would charge an LLVM
-# version difference to the source edit, which is the exact failure this check exists to
-# catch.
-#
-# The verdict is an overlap test on the two bootstrap intervals, not a comparison of a
-# median difference against one protocol's floor. The difference of two independently
-# estimated medians carries the uncertainty of both.
+# R1: rebuild the fw=2 generic path and compare it with the runtime-switch result.
+# Both trees use the same LLVM configuration and distinct cache prefixes.
 #
 # Usage: crosscheck_rebuild.sh --switch-summary PATH/summary.json [--pairs 31]
 #
@@ -57,8 +39,7 @@ else
 fi
 [ -f "$OPA" ] || die "missing $OPA"
 
-# This script builds, which a bench session forbids, so it takes the same lock to make
-# sure it never runs while a session is timing.
+# Rebuilding and benchmarking share the same lock.
 LOCK="$BUILD/.bench.lock"
 mkdir "$LOCK" 2>/dev/null || die "build lock $LOCK exists; a bench session is running"
 trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
@@ -68,14 +49,13 @@ SESSION="$RESULTS/$(utc_stamp)_crosscheck_${OP}"
 mkdir -p "$SESSION/stderr" "$SESSION/stdout"
 note "session $SESSION"
 
-# A second source tree, so the guard can be deleted without touching the tree under test.
-# The working tree is copied, not HEAD, because the bench switch edits are uncommitted.
+# Copy the working tree so the source edit cannot alter the primary build.
 XSRC="$SESSION/src"
 mkdir -p "$XSRC"
 note "copying the tree to $XSRC"
 git -C "$REPO" ls-files -z | tar -C "$REPO" -cf - --null -T - | tar -C "$XSRC" -xf -
 
-# Delete the fw=2 override at source. The generic path in IDISA_Builder then runs.
+# Disable the fw=2 override in the copied tree.
 python3 - "$XSRC/lib/idisa/idisa_arm_builder.cpp" <<'PY'
 import sys
 p = sys.argv[1]
@@ -90,9 +70,7 @@ open(p, "w").write(s)
 print("crosscheck: fw=2 simd_sllv and simd_srlv overrides disabled at source")
 PY
 
-# The second tree must be configured exactly like the first. A fresh configure finds no
-# LLVM at all on this host, and a user who repairs that by pointing at another llvm@N
-# would silently compare two compilers and call the difference a source effect.
+# Reuse the primary tree's CMake settings to prevent toolchain drift.
 read_cache_var() {
     local name="$1"
     awk -F= -v n="$name" '$0 ~ ("^" n ":") { sub(/^[^=]*=/, ""); print; exit }' "$BUILD/CMakeCache.txt"
@@ -111,8 +89,7 @@ note "configuring $XBUILD"
 cmake -S "$XSRC" -B "$XBUILD" "${CFG_ARGS[@]}" >"$SESSION/cmake.log" 2>&1 \
     || { tail -40 "$SESSION/cmake.log" >&2; die "cmake configure failed"; }
 
-# LLVM_PACKAGE_VERSION is not written into the cache by this project, so the version is
-# read from the llvm-config that sits beside the LLVM_DIR each tree actually resolved.
+# Read the LLVM version from the llvm-config beside each resolved LLVM_DIR.
 llvm_version_of() {
     local dir cfg
     dir="$(awk -F= '/^LLVM_DIR:/ { sub(/^[^=]*=/, ""); print; exit }' "$1/CMakeCache.txt")"
@@ -146,8 +123,7 @@ sample() {
     run_one "$out" "$err" "$bin" "${COMMON[@]}" "$OP" "$FW" "$OPA" "$OPB"
     SAMPLE_NS=""; SAMPLE_ITEMS=""; SAMPLE_PCT=""
     [ "$RUN_STATUS" -eq 0 ] || return 0
-    # Both binaries emit the identical module id, so the trace is the only evidence that
-    # each one selected the ARM builder rather than the scalar fallback.
+    # The trace distinguishes the ARM builder from the scalar fallback.
     assert_trace "$err" ARM "$KERNEL"
     local row
     row="$(parse_counter_row "$err" "$KERNEL")"
@@ -157,10 +133,7 @@ sample() {
     return 0
 }
 
-# ---- path proof. Both binaries write simd_sllv2_test_ARM into one shared cache
-# directory, so the only thing keeping them apart is the prefix, and that has to be
-# proved rather than assumed. object_cache.cpp rewrites the modification time of every
-# entry it reads, so a marker file identifies which prefix each binary just used.
+# Resolve each binary's cache prefix from entries touched after the marker.
 MARKER="$SESSION/.marker"
 : > "$MARKER"
 sleep 1
@@ -190,8 +163,7 @@ VEC_B="$(count_vector_insns "$OBJ_B" "_${KERNEL}_DoSegment")"
 PATH_PROOF=pass
 MD5_DISTINCT=yes
 [ "$MD5_A" != "$MD5_B" ] || { MD5_DISTINCT=no; PATH_PROOF=fail; note "the two binaries produced the identical kernel object"; }
-# The rebuilt tree took the generic path at source, so it must carry the same
-# discriminator the runtime switch produces: no eor.16b native, some eor.16b generic.
+# The rebuilt path must contain the generic eor.16b discriminator.
 [ "$EOR_A" -eq 0 ] || { PATH_PROOF=fail; note "the primary binary emitted $EOR_A eor.16b; it is not on the native path"; }
 [ "$EOR_B" -gt 0 ] || { PATH_PROOF=fail; note "the rebuilt binary emitted no eor.16b; the source edit did not take"; }
 
@@ -265,12 +237,7 @@ python3 "$BENCH/stats.py" "$CSV" --label "crosscheck_rebuild_${OP}${FW}" --kerne
     --expect-floor-signature two-separately-built-binaries \
     --floor-signature two-separately-built-binaries \
     | tee "$SESSION/report.txt"
-# S2 fails above on purpose. The rebuild protocol has no floor of its own, so the ratio
-# it produces is a cross-check and never a result. The verdict below is the deliverable.
-
-# The verdict compares two interval estimates. Testing |median_switch - median_rebuild|
-# against one protocol's floor discards a correct headline whenever ordinary sampling
-# noise in either protocol pushes the two medians apart, which happens often.
+# The rebuild has no independent floor, so compare bootstrap intervals only.
 python3 - "$SWITCH_SUMMARY" "$SESSION/summary.json" "$PATH_PROOF" "$MD5_DISTINCT" "$SESSION_VOID" <<'PY'
 import json, sys
 sw = json.load(open(sys.argv[1]))["paired_ratio_B_over_A"]

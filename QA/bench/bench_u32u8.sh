@@ -1,29 +1,7 @@
 #!/usr/bin/env bash
 #
-# D2: u32u8 on large UTF-32LE text.
-#
-# What this measures is the summed nanoseconds of the KERNELS THAT CONTAIN simd_pext and
-# simd_pdep, not the time of those two operations. u8depositMask is about twenty stream
-# loads, long Or and And chains, six esimd_merge calls and eight stores, with one
-# simd_pext call site inside a four-iteration loop. The harness cannot split a kernel's
-# time between one operation and the rest of the kernel, so every figure below is an
-# UPPER BOUND on the operation's share. The per-kernel vector instruction counts are
-# printed next to it so the size of the gap is visible.
-#
-# The switch under test is -bench-generic-shift2 or -bench-generic-shift4. Those toggle
-# the fw=2 or fw=4 simd_sllv and simd_srlv override that the generic pext and pdep are
-# built on. They do not toggle simd_pext or simd_pdep themselves.
-#
-# Two attributions are reported and they are not interchangeable:
-#   share of PIPELINE time = deposit rows / the pipeline driver's own counter row
-#   share of PROCESS  time = deposit rows / the wall time of the whole u32u8 process
-# Only the second may appear in an end-to-end sentence. The process spends time on
-# start, cache load, mmap and teardown that the pipeline total never sees.
-#
-# --null runs this same driver, this same input and this same instrument against an arm
-# B that leaves every timed kernel byte-identical, and emits one floor per measured
-# quantity. A floor from another driver is not a floor here.
-#
+# D2: paired u32u8 timing on large UTF-32LE input. Kernel time is an upper
+# bound on operation time; process and pipeline attribution remain separate.
 # Usage:
 #   bench_u32u8.sh [--bit shift2|shift4] [--pairs 31] [--w-null-file F]
 #   bench_u32u8.sh --null [--bit shift2]
@@ -113,9 +91,7 @@ sum_deposit_pct() {
 }
 
 # probe_objects TAG ARMNAME [flags ...] -> PROBE_OK PROBE_KMD5 PROBE_PMD5 PROBE_PIPE
-# Warms one arm and reads back the md5 of every deposit kernel object joined together,
-# and of the pipeline driver object. All three deposit kernels are compared, not one,
-# because a switch can change any of them.
+# Hash every deposit kernel and the pipeline driver used by one arm.
 probe_objects() {
     local tag="$1" armname="$2"; shift 2
     local out="$SESSION/stdout/live.u8" err="$SESSION/stderr/probe_$tag"
@@ -226,8 +202,7 @@ one_run() {
     local armname="$ARM_A"
     [ "$arm" = "B" ] && armname="$ARM_B"
     assert_trace "$err" "$armname" "$PROOF_KERNEL"
-    # Byte-compare every run. Both nfd BlockSize arms once exited 0 while writing
-    # different bytes, so exit status alone is not a correctness signal.
+    # Reject successful runs whose output differs from the reference.
     cmp -s "$out" "$REFERENCE" || die "$tag produced output that differs from $REFERENCE"
     SAMPLE_NS="$(sum_deposit_ns "$err")"
     SAMPLE_PCT="$(sum_deposit_pct "$err")"
@@ -343,10 +318,7 @@ if [ "$(md5 -q "$PIPE_A")" != "$PMD5_RUN_A" ] || [ "$(md5 -q "$PIPE_B")" != "$PM
     SESSION_VOID=yes; note "VOID: a pipeline object changed mid-session"
 fi
 
-# ---- D2a attribution, from the timing loop itself, not from a single warm run ----
-# Both denominators come from the same runs as the numerator, so neither can drift away
-# from it. The pipeline share and the process share are different numbers and are
-# labelled as different numbers everywhere they appear.
+# ---- D2a attribution from the same runs as the measured numerator ----
 python3 - "$PIPE_CSV" "$SESSION/attribution.txt" "$SESSION/attribution.json" <<'PY'
 import csv, json, statistics, sys
 rows = list(csv.DictReader(open(sys.argv[1])))

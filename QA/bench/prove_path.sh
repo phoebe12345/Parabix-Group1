@@ -14,14 +14,10 @@ set -euo pipefail
 
 usage() { sed -n '2,12p' "$0" >&2; exit 2; }
 
-# The generic fw=2 control is discriminated by eor.16b, not by cmeq. simd_eq at fw<8
-# is not(xor(a,b)) (idisa_builder.cpp:228), which lowers to eor plus bic, and the
-# native path emits neither. Verified on this build for both sllv and srlv.
+# Generic fw=2 shifts contain eor.16b; the native path does not.
 NATIVE_MARKER_ABSENT="eor.16b"
 
-# The instruction counter is shared with the SVE2 driver, which sees GNU syntax and SVE
-# mnemonics that never appear on this host. A fixture covering both syntaxes is the only
-# way this host can prove the counter is right for the container too.
+# The fixture covers the Apple and GNU syntax accepted by the shared classifier.
 counter_selftest() {
     local tmp got want
     tmp="$(mktemp)"
@@ -57,7 +53,6 @@ selftest() {
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' RETURN
     local A="$CORPUS/hex64a" B="$CORPUS/hex64b"
-    # The self-test only proves the mechanism, so the small committed corpus is enough.
     if [ ! -f "$A" ]; then A="$REPO/QA/IDISA_test/randhex65536a"; B="$REPO/QA/IDISA_test/randhex65536b"; fi
     [ -f "$A" ] || die "no operand data for the self-test"
 

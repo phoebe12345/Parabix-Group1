@@ -2,9 +2,7 @@
 #
 # Build QA/bench/corpus/. Nothing here is committed; see .gitignore.
 #
-# nfsrc256.txt is deliberately absent. nfd fails on this branch and writes NUL bytes
-# instead of output, so a variant that emits zeros there does less work and would read
-# as a speedup.
+# nfd input is excluded because the branch does not produce a valid reference output.
 #
 # Usage:
 #   make_corpus.sh --smoke              tiny inputs, seconds, for a harness dry run
@@ -47,8 +45,7 @@ if [ "$SMOKE" -eq 1 ]; then
     U32_SRC_BYTES=$((2 * 1024 * 1024))
     NFC_BYTES=$((2 * 1024 * 1024))
     DENSITY_BLOCKS=$((1 << 12))
-    # A tiny file under the real corpus name would be silently picked up by a later
-    # real run, so the smoke corpus lives in its own directory.
+    # Keep smoke inputs separate from full-size corpora.
     CORPUS="$CORPUS/smoke"
 fi
 
@@ -80,8 +77,7 @@ if [ "$DO_U32U8" -eq 1 ]; then
     iconv -f UTF-8 -t UTF-32LE < "$CORPUS/t160.utf8" > "$CORPUS/t160.u32"
     rm -f "$CORPUS/t160.utf8"
     note "u32u8 reference output, produced by the unmodified native path"
-    # Circular in the weak sense that the binary under test made it. It still catches an
-    # arm that diverges from the native baseline or from the other arm on any later run.
+    # Use the native path as the byte-for-byte reference for both arms.
     st=0
     "$BIN/u32u8" "$CORPUS/t160.u32" > "$CORPUS/u32u8.reference" 2>"$CORPUS/u32u8.reference.err" || st=$?
     [ "$st" -eq 0 ] || die "u32u8 reference run exited $st, see $CORPUS/u32u8.reference.err"

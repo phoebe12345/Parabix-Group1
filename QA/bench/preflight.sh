@@ -95,7 +95,7 @@ NEWER="$(find "$REPO/include" "$REPO/lib/idisa" "$REPO/lib/kernel" "$REPO/tools/
 # 8.
 [ -x "$OBJDUMP" ] || die "missing $OBJDUMP"
 
-# 9. The mechanism self-test. If it fails, every number after it is fiction.
+# 9. Validate the instruction classifier before recording samples.
 if [ "$SKIP_SELFTEST" -eq 0 ]; then
     bash "$BENCH/prove_path.sh" --selftest > "$SESSION/selftest.txt" 2>&1 \
         || { cat "$SESSION/selftest.txt" >&2; die "prove_path.sh --selftest failed"; }

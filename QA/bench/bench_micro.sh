@@ -1,23 +1,7 @@
 #!/usr/bin/env bash
 #
-# D1: paired, interleaved A/B on one idisa_test counter row.
-#
-# Arm A is the native path. Arm B adds one -bench-generic-* switch, which folds into
-# the builder unique name, so the two arms read separate object cache entries and
-# cannot serve each other stale kernels. The cache stays on and warm in both arms;
-# the per-kernel counter brackets DoSegment and never sees JIT time.
-#
-# The switches are global to the builder, so a switch can also change the PIPELINE
-# DRIVER module. That module brackets llvm.readcyclecounter and contributes to the row
-# this script reports. The session therefore proves the pipeline object as well as the
-# kernel object, records whether the two arms' pipeline objects differ, and refuses to
-# accept a noise floor whose arms do not differ in the same structural way.
-#
-# --null measures the noise floor. Arm B is a bench bit that leaves the timed kernel
-# byte-identical and reproduces the measured configuration's pipeline signature, so the
-# floor contains the cost of the arms being two separately compiled objects and, where
-# the measurement has one, the pipeline-image term. The bit is discovered, not assumed.
-#
+# D1: paired, interleaved A/B timing of one idisa_test counter row. The driver
+# proves both kernel and pipeline objects and discovers a structure-matched null arm.
 # Usage:
 #   bench_micro.sh --op simd_sllv --fw 2 --bit shift2 [--pairs 31] [--w-null-file F]
 #   bench_micro.sh --null --op simd_sllv --fw 2 --bit shift2
@@ -149,10 +133,7 @@ note "measured arms differ as: $EXPECT_SIGNATURE"
 
 # ---- arm B selection ----
 if [ "$NULL" -eq 1 ]; then
-    # A null arm must leave the timed kernel byte-identical and must reproduce the
-    # measured configuration's pipeline signature. Otherwise the floor either omits the
-    # pipeline-image term the measurement contains, or contains one the measurement does
-    # not, and in both directions it is the wrong floor.
+    # Match the measured pipeline structure while keeping the timed kernel identical.
     NULL_BIT=""
     for cand in $ALL_BENCH_BITS; do
         [ "$cand" != "$BIT" ] || continue
@@ -174,8 +155,7 @@ if [ "$NULL" -eq 1 ]; then
         ARM_B="ARM$(bench_bit_suffix "$NULL_BIT")"
         FLOOR_SIGNATURE="$EXPECT_SIGNATURE"
     else
-        # No bit reproduces the structure. Fall back to the identical command line, and
-        # record that the floor is missing the layout term so S7 fails downstream.
+        # Record the weaker same-command-line floor so S7 rejects it downstream.
         FLAG_B=()
         ARM_B="$ARM_A"
         FLOOR_SIGNATURE="same-command-line,pipeline-identical"
@@ -262,9 +242,7 @@ fi
 
 if [ "$PMD5_RUN_A" = "$PMD5_RUN_B" ]; then RUN_PIPE_SIG="pipeline-identical"; else RUN_PIPE_SIG="pipeline-distinct"; fi
 
-# Layer 2 path proof on the warm objects that the timing loop will read. The pipeline
-# driver object is proved here too, because a difference there is charged to the
-# operation by every counter row in the table.
+# Record the warm kernel and pipeline objects used by the timing loop.
 {
     echo "prefix        $PREFIX"
     echo "kernel        $KERNEL"
@@ -343,7 +321,7 @@ if [ "$n_attempted" -gt 0 ]; then
     [ "$over" -eq 0 ] || die "signal death rate $n_signal/$n_attempted exceeds 0.02; session aborted"
 fi
 
-# Section 3 step 9: a build during the session rotates CACHE_PREFIX and voids everything.
+# A changed cache prefix or object invalidates the session.
 SESSION_VOID=no
 if ! diff -q <(snapshot_prefixes) "$SESSION/prefixes.before" >/dev/null 2>&1; then
     SESSION_VOID=yes

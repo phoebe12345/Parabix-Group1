@@ -41,8 +41,7 @@ bench_bit_suffix() {
     esac
 }
 
-# Run a command with no pipe anywhere in the path, so no exit code can be hidden.
-# Sets RUN_STATUS. Never aborts on a non-zero status; classification is the caller's job.
+# Run without a pipeline and store the exit status in RUN_STATUS.
 run_one() {
     local out="$1"; shift
     local err="$1"; shift
@@ -79,9 +78,7 @@ parse_counter_rows() {
     awk -v want="$name" '$2 == want && NF >= 12 { s = (NF >= 14 ? $14 : "0"); print $3, $4, $12, s }' "$err"
 }
 
-# The pipeline driver's own row closes the counter table. It carries fewer columns than
-# a kernel row, so parse_counter_rows cannot see it. Its CYCLES value is the pipeline
-# total, which is the denominator of any "share of pipeline time" statement.
+# Parse the shorter pipeline-total row separately from kernel rows.
 parse_pipeline_total_ns() {
     local err="$1" want="$2"
     awk -v w="$want" '$2 == w { print $4; exit }' "$err"
@@ -101,8 +98,7 @@ trace_module_ids() {
     sed -nE 's/^(Wrote cache file|Read cache file|Already compiled): (.*)\.kernel$/\2/p' "$1" || true
 }
 
-# Layer 1 path proof. Every traced module id must end in the arm's builder name, the
-# scalar fallback token must be absent, and the named kernel must appear.
+# Require the expected builder suffix and kernel, with no scalar fallback.
 assert_trace() {
     local err="$1" armname="$2" kernel="$3" ids bad
     ids="$(trace_module_ids "$err")"
@@ -124,8 +120,7 @@ snapshot_prefixes() {
     ls "$OBJCACHE" 2>/dev/null | grep -E '^[^_]+_' | cut -d_ -f1 | sort -u
 }
 
-# awk rather than head: under pipefail an early-exiting head makes ls die on SIGPIPE
-# and the whole pipeline reports 141.
+# Avoid head because pipefail would expose ls receiving SIGPIPE.
 newest_prefix() {
     local listing
     listing="$(ls -t "$OBJCACHE" 2>/dev/null || true)"
@@ -143,9 +138,7 @@ kernel_object_path() {
     printf '%s/%s_%s_%s.o\n' "$OBJCACHE" "$1" "$2" "$3"
 }
 
-# "VECTOR SCALAR" inside one kernel's DoSegment, taken from the object that ran.
-# classify_insns.awk is the single definition of vector, shared with the SVE2 driver so
-# the two platforms cannot count different things.
+# Count vector and scalar instructions using the shared classifier.
 count_insns() {
     local obj="$1" sym="$2"
     "$OBJDUMP" -d --no-show-raw-insn --disassemble-symbols="$sym" "$obj" | awk -f "$CLASSIFY"
@@ -161,17 +154,12 @@ count_mnemonic() {
         | grep -cxF "$mnem" || true
 }
 
-# The pipeline driver module id from a trace, without its builder suffix. The bench
-# switches are global to the builder, so this module can differ between arms even when
-# the timed kernel does not. It has to be proved, not assumed.
+# Return the pipeline module id without its builder suffix.
 pipeline_module_base() {
     trace_module_ids "$1" | awk '/^P[0-9a-f]{40}_/ { sub(/_[A-Z].*$/, ""); print; exit }'
 }
 
-# Which cache prefix a given binary used. object_cache.cpp rewrites the modification
-# time of every entry it reads (lib/objcache/object_cache.cpp:157), so a file touched
-# after the marker is one this binary just used. This is the only way to tell two
-# binaries apart in one shared cache directory, since the trace prints no path.
+# Resolve the cache prefix from an object touched after the marker.
 resolve_prefix_by_touch() {
     local marker="$1" kernel="$2" armname="$3" hit
     hit="$(find "$OBJCACHE" -name "*_${kernel}_${armname}.o" -newer "$marker" -print | sort | awk 'NR==1')"

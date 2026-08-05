@@ -1,24 +1,7 @@
 #!/usr/bin/env bash
 #
-# D3: mvmd_compress and mvmd_expand against mask density, NEON versus generic.
-#
-# The claim this supports is that the native path is constant cost across density while
-# the generic path is data dependent. The density axis is therefore the deliverable, and
-# it needs the same protection every other axis in this harness gets.
-#
-# Two defects in the earlier version made the density axis worthless and both are fixed
-# here. First, each density point used to be its own sub-session, run to completion in
-# order, minutes apart, and the result was min and max pooled across those sessions. Any
-# drift over the sweep landed in the spread. The points are now INTERLEAVED: one
-# repetition visits every point before the next repetition starts, so drift is common
-# mode across the whole axis. Second, the spread had no floor. A REPEAT CONTROL point now
-# re-measures the first density of each width under a second point id, over byte-identical
-# operand files. The spread between those two is the resolvability floor of the density
-# axis, and a density spread below it is not evidence of anything.
-#
-# This is NEON versus generic. It says nothing about SVE2: at fw=8 and fw=16 SVE COMPACT
-# has no encoding and the SVE2 builder delegates to NEON.
-#
+# D3: interleaved NEON/generic density sweep with a repeated control point
+# for the resolvability floor. This driver does not compare SVE2 with NEON.
 # Usage:
 #   bench_density.sh --op mvmd_compress [--pairs 31] [--w-null-file F]
 #   bench_density.sh --null --op mvmd_compress

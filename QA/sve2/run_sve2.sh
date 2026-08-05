@@ -56,9 +56,7 @@ run_sweep() {
     echo "=== $label ==="
     for op in $ops; do
         for fw in 8 16 32 64; do
-            # COMPACT has no encoding below 32-bit elements, so these two rows
-            # run the NEON fallback. Saying PASS without saying that overstates
-            # what the SVE2 sweep covers.
+            # COMPACT is unavailable below 32 bits; label the NEON fallback.
             local note=""
             case "$label:$op:$fw" in
                 SVE2*:mvmd_compress:8|SVE2*:mvmd_compress:16)
@@ -88,11 +86,7 @@ run_sweep "SVE2 (qemu -cpu $QEMU_CPU)" "mvmd_compress mvmd_expand" \
 run_sweep "SVE2 (qemu -cpu $QEMU_CPU)" "simd_pext simd_pdep" \
     randhex65536a randhex65536b "${SVE2_ENV[@]}"
 
-# A passing SVE2 run is not on its own evidence that any SVE2 instruction ran:
-# the builder name and the cache file name are set by selection, not by codegen.
-# cortex-a72 implements no SVE at all, so the same binary must die on an illegal
-# instruction. If it passes, BEXT never reached the CPU and the rows above are
-# measuring the generic fallback.
+# Confirm that the emitted BitPerm instruction traps on a non-SVE CPU.
 echo
 echo "=== negative control: same code on cortex-a72, which has no SVE ==="
 set +e

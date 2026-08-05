@@ -1,19 +1,5 @@
-# One definition of "vector instruction" for the whole harness.
-#
-# It reads either llvm-objdump output or a -ShowASM dump, in either Apple syntax
-# (add.16b v0, v1, v2) or GNU syntax (add v0.16b, v1.16b, v2.16b), and it covers both
-# NEON and SVE. Classification is by operand register class, not by a list of mnemonics:
-# and, orr, add, sub, lsl, lsr and mov are all scalar mnemonics as well as vector ones,
-# so any allow-list of mnemonics counts loop bookkeeping as vector work.
-#
-# An instruction counts as vector when the mnemonic carries a NEON arrangement suffix,
-# or when any operand names a v, z, p or q register. The q form is included because
-# "ldr q1, [x9]" is a 128 bit vector transfer; leaving it out undercounts NEON against
-# SVE, whose equivalent ld1b names a z register and would be counted. The scalar float
-# forms d, s, h and b are not counted, because those registers are also plain scalar
-# floating point and this code emits none.
-#
-# Output: "VECTOR SCALAR". With -v mode=list it prints "class mnemonic" per instruction.
+# Classify Apple/GNU NEON and SVE assembly by arrangement suffix or vector
+# register operands. Output is "VECTOR SCALAR"; mode=list emits each instruction.
 
 function strip_comment(s) {
     sub(/\/\/.*$/, "", s)
@@ -46,9 +32,7 @@ function strip_comment(s) {
     if (mnem ~ /\.(8b|16b|4h|8h|2s|4s|1d|2d)$/) isvec = 1
 
     if (!isvec) {
-        # GNU NEON, all SVE data registers, and SVE predicate registers. No general
-        # purpose register is named v, z or p, so a digit after one of those letters
-        # is an unambiguous vector operand.
+        # GNU NEON data, SVE data, and SVE predicate registers.
         norm = operands
         gsub(/[{}\[\],\/!]/, " ", norm)
         n = split(norm, tok, /[ \t]+/)
