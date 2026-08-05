@@ -1,0 +1,21 @@
+{
+ "utc": "20260805T122719Z",
+ "scope": "process",
+ "quantity": "wall time of the whole process, start to teardown",
+ "tool": "build/bin/nfc",
+ "base_args": [],
+ "input": "/private/tmp/claude-501/-Users-manvir-sfu-479summer2026/174d3d2d-3839-480f-a0ca-518324072485/scratchpad/nf_1280mb",
+ "input_bytes": 1288499200,
+ "input_sha256": "46a4299b375d2791303171462c8268e0c83b34887640fed58a5414b184f9a845",
+ "switch_toggled": "-bench-generic-compress",
+ "null_bit": "-bench-generic-bitperm",
+ "pairs": 31,
+ "warmup": 3,
+ "git_head": "d017d6d7dabb985ef7246bc01f7d8ea2912c5556",
+ "git_branch": "manvir/macro-bench",
+ "git_status": "",
+ "uname": "Darwin MacBook-Pro-16.local 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:27 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6041 arm64",
+ "hw_model": "Mac16,7",
+ "power": "Now drawing from 'AC Power'",
+ "cache_prefix": "git-05ba04b3@080526042642"
+}

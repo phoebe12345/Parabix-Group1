@@ -1,0 +1,45 @@
+{
+ "null": {
+  "median": 0.9990688371337081,
+  "p10": 0.9897986842380596,
+  "p90": 1.0047406512726944,
+  "ci": [
+   0.9966593909253805,
+   1.0008754602736698
+  ],
+  "above": 12,
+  "p_sign": 0.28104151505976915
+ },
+ "measured": {
+  "median": 1.0193386577844359,
+  "p10": 1.0142260966234407,
+  "p90": 1.0288126210622832,
+  "ci": [
+   1.0183845234148508,
+   1.0215371394528772
+  ],
+  "above": 31,
+  "p_sign": 9.313225746154785e-10
+ },
+ "floor_spread": 0.010201315761940388,
+ "effect": 0.019338657784435886,
+ "gates": {
+  "S1_ci_excludes_1": true,
+  "S2_3x_floor": false,
+  "S3_sign_p<0.01": true,
+  "S4_path_proof": true,
+  "S5_outputs_equal": true,
+  "S6_not_void": true,
+  "S7_floor_structure": true
+ },
+ "verdict": "NOT REPORTABLE",
+ "outputs_md5": {
+  "": "8ea512ac2d1ee71d7b6730c636715d2c",
+  "-bench-generic-compress": "8ea512ac2d1ee71d7b6730c636715d2c",
+  "-bench-generic-bitperm": "8ea512ac2d1ee71d7b6730c636715d2c"
+ },
+ "kernels_differing": [
+  "elemFilter_8"
+ ],
+ "pipeline_distinct": true
+}
