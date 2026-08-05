@@ -14,7 +14,7 @@ public:
     std::vector<llvm::Value *> simd_pext(unsigned fw, std::vector<llvm::Value *> v, llvm::Value * extract_mask) override;
     llvm::Value * simd_pdep(unsigned fw, llvm::Value * v, llvm::Value * deposit_mask) override;
 
-    ~IDISA_ARM_SVE2_Builder() override {}
+    ~IDISA_ARM_SVE2_Builder() override = default;
 
 protected:
     llvm::Value * sveBitPerm(llvm::Intrinsic::ID id, unsigned fw, llvm::Value * a, llvm::Value * mask);

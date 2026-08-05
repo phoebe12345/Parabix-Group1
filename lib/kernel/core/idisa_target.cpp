@@ -93,47 +93,35 @@ static bool cpuModelHasExtension(const char * ext) {
 #endif
     return false;
 }
-#endif
 
-// getHostCPUFeatures is unimplemented on Darwin/AArch64 and returns an empty
-// map, so the model lookup (added in d02f0e0b for apple-m1) is still needed.
-// The flag path is the one that works under QEMU, whose CPU name is not in
-// LLVM's table. Neither covers both, so try both.
-bool ARM_available() {
-#ifdef PARABIX_ARM_TARGET
+// Darwin needs the CPU-model fallback; QEMU needs the reported feature flags.
+static bool armFeatureAvailable(const char * feature, const char * alias, const char * modelExt) {
     StringMap<bool> features;
-    if (getHostFeatures(features)) {
-        // "asimd" is the name Linux reports for NEON on AArch64.
-        if (features.lookup("asimd") || features.lookup("neon")) return true;
-    }
-    return cpuModelHasExtension("+neon");
-#endif
-    return false;
-}
-
-// Same two-path shape as ARM_available. Without the fallback, a host whose flag
-// path fails still gets NEON through the model table while this returns false,
-// which silently downgrades a real SVE2 machine.
-bool SVE2_available() {
-#ifdef PARABIX_ARM_TARGET
-    StringMap<bool> features;
-    if (getHostFeatures(features) && features.lookup("sve2")) {
+    if (getHostFeatures(features)
+        && (features.lookup(feature) || (alias && features.lookup(alias)))) {
         return true;
     }
-    return cpuModelHasExtension("+sve2");
+    return cpuModelHasExtension(modelExt);
+}
+#endif
+
+static bool ARM_available() {
+#ifdef PARABIX_ARM_TARGET
+    return armFeatureAvailable("asimd", "neon", "+neon");
 #endif
     return false;
 }
 
-// FEAT_SVE_BitPerm is optional on SVE2, so BEXT and BDEP need a check of their
-// own. Two spellings because the kernel flag and the LLVM feature name differ.
-bool SVE2_BitPerm_available() {
+static bool SVE2_available() {
 #ifdef PARABIX_ARM_TARGET
-    StringMap<bool> features;
-    if (getHostFeatures(features)) {
-        if (features.lookup("sve2-bitperm") || features.lookup("svebitperm")) return true;
-    }
-    return cpuModelHasExtension("+sve2-bitperm");
+    return armFeatureAvailable("sve2", nullptr, "+sve2");
+#endif
+    return false;
+}
+
+static bool SVE2_BitPerm_available() {
+#ifdef PARABIX_ARM_TARGET
+    return armFeatureAvailable("sve2-bitperm", "svebitperm", "+sve2-bitperm");
 #endif
     return false;
 }
@@ -216,24 +204,14 @@ KernelBuilder * GetIDISA_Builder(llvm::LLVMContext & C, const StringMap<bool> & 
     if (LLVM_LIKELY(codegen::BlockSize == 0)) {  // No BlockSize override: use processor SIMD width
         codegen::BlockSize = 128;
     }
-    // Feature detection reads /proc/cpuinfo, which under user-mode QEMU reports
-    // the host CPU rather than the emulated one. SVE2 is therefore invisible to
-    // detection there, even though the emulated CPU executes SVE2 correctly.
-    // This override selects a builder directly so the SVE2 path can be tested
-    // and measured without full-system emulation:
-    //
-    //     PARABIX_FORCE_BUILDER=ARM_SVE2 qemu-aarch64 -cpu max ./bin/idisa_test ...
-    //
-    // Forcing a builder the hardware does not implement will fault at run time.
-    // That is intended: this is a testing lever, not a fallback.
+    // User-mode QEMU reports host features, so tests may select a builder directly.
     if (const char * const forced = std::getenv("PARABIX_FORCE_BUILDER")) {
         if (*forced) {
             llvm::errs() << "NOTE: PARABIX_FORCE_BUILDER=" << forced
                          << " overrides CPU detection.\n";
             if (std::strcmp(forced, "ARM_SVE2") == 0) {
                 featureSet.set((size_t)Feature::ARM_SVE2);
-                // Detection cannot see the emulated CPU, so BitPerm is assumed
-                // here too. PARABIX_EXTRA_MATTR must supply +sve2-bitperm.
+                // PARABIX_EXTRA_MATTR must also expose BitPerm to LLVM.
                 featureSet.set((size_t)Feature::ARM_SVE2_BITPERM);
                 setBenchFeatures();
                 return new KernelBuilderImpl<IDISA_ARM_SVE2_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
@@ -258,9 +236,7 @@ KernelBuilder * GetIDISA_Builder(llvm::LLVMContext & C, const StringMap<bool> & 
         setBenchFeatures();
         return new KernelBuilderImpl<IDISA_ARM_Builder>(C, featureSet, codegen::BlockSize, codegen::LaneWidth);
     }
-    // NEON is mandatory in ARMv8-A, so reaching here means detection failed.
-    // The scalar fallback is still correct, so this degrades silently and the
-    // test suite keeps passing without exercising any ARM code.
+    // NEON is mandatory in ARMv8-A; reaching this path means detection failed.
     llvm::errs() << "WARNING: built for ARM but NEON was not detected. "
                     "Falling back to a non-SIMD builder; ARM code paths will "
                     "not be exercised and timings will not be meaningful.\n";

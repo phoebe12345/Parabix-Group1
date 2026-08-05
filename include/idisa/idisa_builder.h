@@ -48,10 +48,7 @@ enum class Feature : size_t {
     ARM_SVE2,
     ARM_SVE2_BITPERM,
     // ---------------
-    // Benchmark control bits. These are not hardware features. Each bit turns one
-    // native override off so the generic path runs instead, and each bit also changes
-    // getBuilderUniqueName (see benchSuffix), so the two arms of an A/B get separate
-    // object cache entries and cannot serve each other stale kernels.
+    // Benchmark controls, encoded in the builder name to isolate cache entries.
     BENCH_GENERIC_COMPRESS,
     BENCH_GENERIC_EXPAND,
     BENCH_GENERIC_SHIFT2,
@@ -74,9 +71,6 @@ public:
         return mFeatureSet.test((size_t)feature);
     }
 
-    // Folded into every ARM builder's unique name so a benchmark arm cannot read back
-    // a cache entry written by the other arm. Empty unless a BENCH_ bit is set, so the
-    // default builder names and the existing cache entries are unchanged.
     std::string benchSuffix() const {
         std::string s;
         if (hasFeature(Feature::BENCH_GENERIC_COMPRESS)) s += "c";

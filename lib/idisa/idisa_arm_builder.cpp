@@ -44,17 +44,8 @@ llvm::GlobalVariable * getOrCreateByteCompressTable(llvm::Module * mod, llvm::LL
                                      llvm::GlobalValue::PrivateLinkage, tableInit, name);
 }
 
-// One ready-made byte permutation per value of the fw-wide field mask, so TBL1
-// does the whole operation in one instruction. The byte-granular path above
-// exists because fw=8 has 16 fields and a direct table would need 65536 entries.
-// At fw 16 and above the field count is 8 or fewer, so the direct table is small
-// and the mask widening, the rank arithmetic and the merge step all become
-// unnecessary.
-//
-// Compress sends field f to slot rank(f). Expand is the inverse. Bytes that no
-// field writes get index 16, which is out of range for TBL1 and reads as zero.
-//
-// Sizes: 4096 bytes at fw=16, 256 at fw=32, 64 at fw=64.
+// Direct lookup is practical above fw=8: 4 KiB at fw=16 and smaller thereafter.
+// Compress maps field f to rank(f); expand inverts it. Index 16 yields zero.
 llvm::GlobalVariable * getOrCreateFieldPermuteTable(llvm::Module * mod, llvm::LLVMContext & C,
                                                     unsigned fw, bool isExpand) {
     const unsigned fieldCount = 128 / fw;
@@ -223,28 +214,12 @@ Value * IDISA_ARM_Builder::mvmd_shuffle2(unsigned fw, Value * table0, Value * ta
     return IDISA_Builder::mvmd_shuffle2(fw, table0, table1, index_vector);
 }
 
-// Turns a fieldCount-bit mask (one bit per fw-wide field) into a 16-bit
-// byte-mask, using a single vector broadcast instead of a scalar
-// dependency chain. Prof. Cameron flagged the earlier version - a loop
-// that OR'd into one scalar register up to 16 times in a row - since each
-// step had to wait for the previous one to finish, with no parallelism
-// possible at all. This version instead builds a small per-field boolean
-// vector (fieldCount lanes, same pattern already used elsewhere in this
-// file), then uses one TBL gather to broadcast each field's flag out to
-// every byte it covers in parallel, and packs the result back into a
-// scalar mask with hsimd_signmask.
-//
-// Shared by both mvmd_compress and mvmd_expand, on both NEON and SVE2
-// (the SVE2 builder inherits this unchanged) - fixing it here fixes the
-// same performance issue on both.
+// Expand one field bit to each byte it covers without a scalar dependency chain.
 Value * IDISA_ARM_Builder::expandFieldMaskToBytes(Value * select_mask, unsigned fw) {
     const unsigned bytesPerField = fw / 8;     // 2, 4, or 8 for fw=16/32/64
     FixedVectorType * v16xi8Ty = FixedVectorType::get(getInt8Ty(), 16);
 
-    // Every lane tests its own bit of a broadcast copy of the mask, so no lane
-    // waits on another. Assembling the vector lane by lane instead would build
-    // a dependency chain as long as the field count.
-    // fw >= 16 here, so the field count is at most 8 and every selector fits in a byte.
+    // fw >= 16, so every field selector fits in one byte.
     Value * splat = fwCast(8, simd_fill(8, CreateZExtOrTrunc(select_mask, getInt8Ty())));
     Constant * sel[16];
     for (unsigned i = 0; i < 16; i++) {
@@ -257,9 +232,7 @@ Value * IDISA_ARM_Builder::expandFieldMaskToBytes(Value * select_mask, unsigned 
     return CreateZExtOrTrunc(hsimd_signmask(8, CreateSExt(isSet, v16xi8Ty)), getInt16Ty());
 }
 
-// One lane per bit of a 16-bit byte mask. Lanes 0-7 read the low half of the
-// mask and 8-15 the high half, so no lane waits on another. A chain of
-// InsertElement, or a store to a stack slot, serialises all 16 steps.
+// Expand a 16-bit mask to one boolean byte lane per bit.
 Value * IDISA_ARM_Builder::byteMaskToLaneMask(Value * byteMask) {
     FixedVectorType * v16xi8Ty = FixedVectorType::get(getInt8Ty(), 16);
     Value * maskPair = CreateBitCast(CreateZExtOrTrunc(byteMask, getInt16Ty()),
@@ -440,10 +413,7 @@ Value * IDISA_ARM_Builder::esimd_mergel(unsigned fw, Value * a, Value * b) {
   return IDISA_Builder::esimd_mergel(fw, a, b);
 }
 
-// Native variable shift for 2-bit fields. fw==4 moved to the generic
-// builder (idisa_builder.cpp) since it uses no ARM-specific intrinsics -
-// every target benefits from it now, not just this one. Callers
-// (pext/pdep/rotl/rotr) only feed in-range amounts (< fw).
+// Native variable shift for 2-bit fields; callers provide in-range amounts.
 Value * IDISA_ARM_Builder::simd_sllv(unsigned fw, Value * v, Value * shifts) {
     if (!hasFeature(Feature::BENCH_GENERIC_SHIFT2) && getVectorBitWidth(v) == ARM_width && fw == 2) {
         auto splat8 = [&](uint8_t x) { return getSplat(16, getInt8(x)); };

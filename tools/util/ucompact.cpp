@@ -3,46 +3,31 @@
  *  SPDX-License-Identifier: OSL-3.0
  */
 
-#include <kernel/core/idisa_target.h>
-#include <boost/filesystem.hpp>
-#include <grep/grep_kernel.h>
-#include <re/cc/cc_compiler.h>
-#include <re/cc/cc_compiler_target.h>
+#include <kernel/basis/p2s_kernel.h>
+#include <kernel/basis/s2p_kernel.h>
+#include <kernel/core/streamset.h>
+#include <kernel/io/source_kernel.h>
+#include <kernel/io/stdout_kernel.h>
+#include <kernel/pipeline/driver/cpudriver.h>
+#include <kernel/pipeline/program_builder.h>
+#include <kernel/streamutils/deletion.h>
+#include <kernel/unicode/UCD_property_kernel.h>
+#include <kernel/unicode/utf8_decoder.h>
+#include <kernel/unicode/utf8_support.h>
 #include <re/adt/adt.h>
 #include <re/parse/parser.h>
 #include <re/transforms/re_simplifier.h>
 #include <re/unicode/resolve_properties.h>
-#include <re/cc/cc_kernel.h>
-#include <kernel/core/kernel_builder.h>
-#include <kernel/pipeline/program_builder.h>
-#include <kernel/basis/s2p_kernel.h>
-#include <kernel/basis/p2s_kernel.h>
-#include <kernel/io/source_kernel.h>
-#include <kernel/io/stdout_kernel.h>
-#include <kernel/core/streamset.h>
-#include <kernel/unicode/utf8_decoder.h>
-#include <kernel/unicode/utf8_support.h>
-#include <kernel/unicode/UCD_property_kernel.h>
-#include <kernel/streamutils/deletion.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/Module.h>
-#include <llvm/Support/CommandLine.h>
-#include <llvm/Support/raw_ostream.h>
-#include <pablo/pablo_kernel.h>
-#include <pablo/builder.hpp>
-#include <pablo/pe_zeroes.h>
-#include <kernel/pipeline/driver/cpudriver.h>
 #include <toolchain/toolchain.h>
-#include <fileselect/file_select.h>
+#include <llvm/Support/CommandLine.h>
+
+#include <cerrno>
+#include <cstdint>
 #include <fcntl.h>
-#include <iomanip>
 #include <iostream>
 #include <string>
 #include <sys/stat.h>
-#include <vector>
-#include <map>
-
-namespace fs = boost::filesystem;
+#include <unistd.h>
 
 using namespace llvm;
 using namespace codegen;
@@ -58,34 +43,21 @@ static cl::opt<unsigned> CompressFw("cfw", cl::desc("field width for stream comp
 #define SHOW_BIXNUM(name) if (codegen::EnableIllustrator) P.captureBixNum(#name, name)
 #define SHOW_BYTES(name) if (codegen::EnableIllustrator) P.captureByteData(#name, name)
 
-typedef void (*UCompactFunctionType)(uint32_t fd);
+using UCompactFunction = void (*)(uint32_t fd);
 
-UCompactFunctionType pipelineGen(CPUDriver & driver, re::Name * CC_name) {
-
+UCompactFunction pipelineGen(CPUDriver & driver, re::Name * CC_name) {
     auto P = CreatePipeline(driver, Input<uint32_t>{"fileDescriptor"});
-
     Scalar * const fileDescriptor = P.getInputScalar("fileDescriptor");
 
-    //  Create a stream set consisting of a single stream of 8-bit units (bytes).
     StreamSet * const ByteStream = P.CreateStreamSet(1, 8);
     SHOW_BYTES(ByteStream);
-
-    //  Read the file into the ByteStream.
     P.CreateKernelCall<ReadSourceKernel>(fileDescriptor, ByteStream);
 
-    //  Create a set of 8 parallel streams of 1-bit units (bits).
     StreamSet * BasisBits = P.CreateStreamSet(8, 1);
     SHOW_BIXNUM(BasisBits);
-
-    //  Transpose the ByteSteam into parallel bit stream form.
     P.CreateKernelCall<S2PKernel>(ByteStream, BasisBits);
 
-    //  Create a character class bit stream.
     StreamSet * CCmask = P.CreateStreamSet(1, 1);
-
-    std::map<std::string, StreamSet *> propertyStreamMap;
-    auto nameString = CC_name->getFullName();
-    propertyStreamMap.emplace(nameString, CCmask);
     P.CreateKernelFamilyCall<UnicodePropertyKernelBuilder>(CC_name, BasisBits, CCmask);
     SHOW_STREAM(CCmask);
 
@@ -97,8 +69,7 @@ UCompactFunctionType pipelineGen(CPUDriver & driver, re::Name * CC_name) {
     P.CreateKernelCall<U8Spans>(CCmask, u8index, CCspans);
     SHOW_STREAM(CCspans);
 
-    //  Filter the basis bits rather than the byte stream, so the compression
-    //  runs at a selectable field width instead of the fixed byte path.
+    // Compress the basis streams at the requested field width.
     StreamSet * FilteredBasis = P.CreateStreamSet(8, 1);
     FilterByMask(P, CCspans, BasisBits, FilteredBasis, 0, CompressFw);
 
@@ -120,7 +91,7 @@ int main(int argc, char *argv[]) {
     }
     CPUDriver driver("ucompact");
 
-    UCompactFunctionType fnPtr = nullptr;
+    UCompactFunction fnPtr = nullptr;
     re::RE * CC_re = re::simplifyRE(re::RE_Parser::parse(CC_expr));
     CC_re = UCD::linkAndResolve(CC_re);
     CC_re = UCD::externalizeProperties(CC_re);
