@@ -2,8 +2,11 @@
 #
 # Usage: ./run_mask_sweep <path-to-idisa_test>
 #
-# Runs mvmd_compress and mvmd_expand at every field width over all 65536
-# possible block masks. Data files are generated on first use.
+# Runs mvmd_compress and mvmd_expand at every field width over inputs that
+# enumerate all 65536 16-bit block patterns. The distinct mask spaces this
+# covers are 65536, 256, 16 and 4 at fw 8, 16, 32 and 64: every possible
+# mask at every width, not 65536 at every width. Data files are generated
+# on first use.
 
 idisa_test="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 cd "$(dirname "$0")"
