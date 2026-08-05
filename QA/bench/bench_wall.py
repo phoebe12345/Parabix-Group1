@@ -1,28 +1,56 @@
 #!/usr/bin/env python3
-"""Certified-style macro A/B for nfc: whole-process wall time, scope=process.
+"""Certified-style macro A/B on whole-process wall time, scope=process.
 
 Follows the QA/bench discipline: discovered null bit with structural signature
 match, paired interleaved sampling, bootstrap CI, exact sign test, 3x-floor gate,
 path proof by object md5, output equality, cache-prefix void check.
-"""
-import subprocess, time, statistics, sys, os, hashlib, random, math, json
 
-REPO = "/Users/manvir/sfu/479summer2026/Parabix-Group1"
-TOOL = sys.argv[1]
-BASE = sys.argv[3:]
+Usage: bench_wall.py [--bit compress] [--pairs 31] TOOL INPUT [TOOL_ARGS...]
+
+Writes manifest, raw samples, path proof and summary into a session directory
+under QA/bench/results, like the shell drivers.
+"""
+import argparse, subprocess, time, statistics, sys, os, hashlib, random, math, json
+
+BENCH = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(BENCH))
+RESULTS = os.path.join(BENCH, "results")
 OBJCACHE = os.path.expanduser("~/.parabix/objcache")
-INP = sys.argv[2]
-PAIRS = 31
-WARMUP = 3
-MEASURE = "-bench-generic-compress"
-CANDIDATES = ["-bench-generic-bitperm", "-bench-generic-shift4", "-bench-generic-shift2"]
-SUFFIX = {"": "_ARM", "-bench-generic-compress": "_ARM_bgc",
-          "-bench-generic-bitperm": "_ARM_bgb",
-          "-bench-generic-shift4": "_ARM_bgs4",
-          "-bench-generic-shift2": "_ARM_bgs2"}
+BITS = ["compress", "expand", "shift2", "shift4", "bitperm"]
+SUF = {"compress": "_bgc", "expand": "_bge", "shift2": "_bgs2",
+       "shift4": "_bgs4", "bitperm": "_bgb"}
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--bit", default="compress", choices=BITS)
+ap.add_argument("--pairs", type=int, default=31)
+ap.add_argument("--warmup", type=int, default=3)
+ap.add_argument("tool")
+ap.add_argument("input")
+ap.add_argument("base", nargs=argparse.REMAINDER)
+A = ap.parse_args()
+
+TOOL, INP, BASE, PAIRS = A.tool, A.input, A.base, A.pairs
+MEASURE = "-bench-generic-" + A.bit
+# expand has no working generic arm at fw=8, so it is never a null candidate
+CANDIDATES = ["-bench-generic-" + b for b in ["bitperm", "shift4", "shift2", "compress"]
+              if b != A.bit and b != "expand"]
+SUFFIX = {"": "_ARM", MEASURE: "_ARM" + SUF[A.bit]}
+for c in CANDIDATES:
+    SUFFIX[c] = "_ARM" + SUF[c.replace("-bench-generic-", "")]
+
+STAMP = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+SESSION = os.path.join(RESULTS, f"{STAMP}_wall_{os.path.basename(TOOL)}_{A.bit}")
+os.makedirs(SESSION, exist_ok=True)
 
 def md5(path):
     h = hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def sha256(path):
+    h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
@@ -42,9 +70,9 @@ def is_pipeline_key(key):
         all(c in "0123456789abcdef" for c in key[1:])
 
 def arm_map(prefix, flag, trace):
-    """Objects for exactly the kernels this run's trace names, keyed without
-    the builder suffix. Pipeline modules are returned as a sorted md5 list,
-    because their hash-based ids differ between arms."""
+    """Objects for exactly the kernels this run's trace names, keyed without the
+    builder suffix. Pipeline modules come back as a sorted md5 list, because
+    their hash-based ids differ between arms."""
     suf = SUFFIX[flag]
     names = set()
     for line in open(trace):
@@ -78,15 +106,19 @@ def timed(flags):
         print(f"SIGNAL DEATH: exit {r.returncode} flags={flags}"); sys.exit(1)
     return (t1 - t0) / 1e6
 
-def paired(flags_b, n):
-    ratios = []
+def paired(flags_b, n, csv_path):
+    rows = []
     for i in range(n):
         if i % 2 == 0:
-            ta = timed([]); tb = timed(flags_b)
+            ta = timed([]); tb = timed(flags_b); order = "AB"
         else:
-            tb = timed(flags_b); ta = timed([])
-        ratios.append(tb / ta)
-    return sorted(ratios)
+            tb = timed(flags_b); ta = timed([]); order = "BA"
+        rows.append((i, order, ta, tb, tb / ta))
+    with open(csv_path, "w") as f:
+        f.write("pair,order,t_native_ms,t_other_ms,ratio_b_over_a\n")
+        for r in rows:
+            f.write(f"{r[0]},{r[1]},{r[2]:.3f},{r[3]:.3f},{r[4]:.6f}\n")
+    return sorted(r[4] for r in rows)
 
 def stats(ratios, label):
     n = len(ratios)
@@ -108,14 +140,17 @@ def sig(nat, other):
     missing = [k for k in nk if k not in ok]
     return kdiff, pdiff, missing
 
-os.chdir(REPO)
+def git(*args):
+    return subprocess.run(["git", "-C", REPO] + list(args),
+                          capture_output=True, text=True).stdout.strip()
+
 prefix_before = newest_prefix()
+print(f"session {SESSION}")
 print(f"cache prefix: {prefix_before}")
 
-# probe all arms once, collect object maps and traces
 maps, scalar_leak = {}, {}
 for flag in [""] + [MEASURE] + CANDIDATES:
-    tr = f"/tmp/wall_trace{SUFFIX[flag]}.txt"
+    tr = os.path.join(SESSION, f"trace{SUFFIX[flag]}.txt")
     rc = run_once([flag] if flag else [], trace=tr)
     if rc != 0: print(f"arm '{flag or 'native'}' exit {rc}"); sys.exit(1)
     with open(tr) as f: t = f.read()
@@ -135,37 +170,34 @@ for c in CANDIDATES:
     print(f"candidate {c}: {len(kd)} kernel diffs, pipeline distinct: {pd}, missing {len(ms)}")
     if not kd and not ms and pd == pdiff_m:
         null_flag = c; break
-if null_flag is None:
-    for c in CANDIDATES:
-        kd, pd, ms = sig(maps[""], maps[c])
-        if not kd and not ms:
-            null_flag = c
-            print("WARNING: no candidate matches pipeline structure; S7 will not hold")
-            break
 if null_flag is None: print("FATAL: no usable null bit"); sys.exit(1)
 print(f"null bit: {null_flag}")
 
-# S5: output equality across all three arms
 outs = {}
 for flag in ["", MEASURE, null_flag]:
-    r = subprocess.run([TOOL] + BASE + ([flag] if flag else []) + [INP], capture_output=True)
-    outs[flag] = hashlib.md5(r.stdout).hexdigest()
+    h = hashlib.md5()
+    p = subprocess.Popen([TOOL] + BASE + ([flag] if flag else []) + [INP],
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    for chunk in iter(lambda: p.stdout.read(1 << 20), b""):
+        h.update(chunk)
+    p.wait()
+    outs[flag] = h.hexdigest()
 print(f"outputs identical: {len(set(outs.values())) == 1}")
 
-for _ in range(WARMUP):
+for _ in range(A.warmup):
     timed([]); timed([null_flag]); timed([MEASURE])
 
-null_ratios = paired([null_flag], PAIRS)
+null_ratios = paired([null_flag], PAIRS, os.path.join(SESSION, "samples_null.csv"))
 null_stats = stats(null_ratios, f"NULL  (native vs {null_flag})")
 floor = max(abs(null_stats["p10"] - 1.0), abs(null_stats["p90"] - 1.0))
 
-meas_ratios = paired([MEASURE], PAIRS)
+meas_ratios = paired([MEASURE], PAIRS, os.path.join(SESSION, "samples_measured.csv"))
 m = stats(meas_ratios, f"MEAS  (native vs {MEASURE})")
 
 prefix_after = newest_prefix()
 void = prefix_after != prefix_before \
-       or arm_map(prefix_before, "", f"/tmp/wall_trace{SUFFIX['']}.txt") != maps[""] \
-       or arm_map(prefix_before, MEASURE, f"/tmp/wall_trace{SUFFIX[MEASURE]}.txt") != maps[MEASURE]
+       or arm_map(prefix_before, "", os.path.join(SESSION, f"trace{SUFFIX['']}.txt")) != maps[""] \
+       or arm_map(prefix_before, MEASURE, os.path.join(SESSION, f"trace{SUFFIX[MEASURE]}.txt")) != maps[MEASURE]
 
 effect = abs(m["median"] - 1.0)
 gates = {
@@ -181,11 +213,34 @@ gates = {
 print(f"\nfloor_spread {floor:.4f}   effect {effect:.4f}   scope process")
 for k, v in gates.items(): print(f"  {k}: {'PASS' if v else 'FAIL'}")
 verdict = "REPORTABLE" if all(gates.values()) else "NOT REPORTABLE"
-print(f"\n{verdict}: generic-compress over native = {m['median']:.4f} "
+print(f"\n{verdict}: {MEASURE} over native = {m['median']:.4f} "
       f"(floor {floor:.4f}, N={PAIRS}, whole-process wall time)")
-json.dump(dict(input=INP, pairs=PAIRS, null_flag=null_flag, floor=floor,
-               null_stats={k: v for k, v in null_stats.items()},
-               measured={k: v for k, v in m.items()},
-               kernels_differing=kdiff_m, pipeline_distinct=pdiff_m,
-               gates=gates, verdict=verdict, prefix=prefix_before),
-          open("/private/tmp/claude-501/-Users-manvir-sfu-479summer2026/174d3d2d-3839-480f-a0ca-518324072485/scratchpad/wall_certified_summary.json", "w"), indent=1, default=str)
+
+with open(os.path.join(SESSION, "path_proof.txt"), "w") as f:
+    f.write(f"prefix {prefix_before}\n")
+    for flag in ["", MEASURE, null_flag]:
+        kmap, pmods = maps[flag]
+        f.write(f"\narm '{flag or 'native'}' ({SUFFIX[flag]}):\n")
+        for k in sorted(kmap): f.write(f"  {k}  {kmap[k]}\n")
+        for pm in pmods: f.write(f"  pipeline  {pm}\n")
+    f.write(f"\ndiffering kernels vs native: {kdiff_m}\npipeline distinct: {pdiff_m}\n")
+
+manifest = dict(
+    utc=STAMP, scope="process",
+    quantity="wall time of the whole process, start to teardown",
+    tool=TOOL, base_args=BASE, input=INP,
+    input_bytes=os.path.getsize(INP), input_sha256=sha256(INP),
+    switch_toggled=MEASURE, null_bit=null_flag, pairs=PAIRS, warmup=A.warmup,
+    git_head=git("rev-parse", "HEAD"), git_branch=git("rev-parse", "--abbrev-ref", "HEAD"),
+    git_status=git("status", "--porcelain"),
+    uname=subprocess.run(["uname", "-a"], capture_output=True, text=True).stdout.strip(),
+    hw_model=subprocess.run(["sysctl", "-n", "hw.model"], capture_output=True, text=True).stdout.strip(),
+    power=subprocess.run(["pmset", "-g", "ps"], capture_output=True, text=True).stdout.splitlines()[0],
+    cache_prefix=prefix_before,
+)
+json.dump(manifest, open(os.path.join(SESSION, "manifest.json"), "w"), indent=1)
+json.dump(dict(null=null_stats, measured=m, floor_spread=floor, effect=effect,
+               gates=gates, verdict=verdict, outputs_md5=outs,
+               kernels_differing=kdiff_m, pipeline_distinct=pdiff_m),
+          open(os.path.join(SESSION, "summary.json"), "w"), indent=1, default=str)
+print(f"artifacts in {SESSION}")
