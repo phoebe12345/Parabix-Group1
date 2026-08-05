@@ -7,6 +7,7 @@
 #include <codegen/CBuilder.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <bitset>
+#include <string>
 
 namespace llvm { class Constant; }
 namespace llvm { class LoadInst; }
@@ -45,6 +46,17 @@ enum class Feature : size_t {
     AVX512_VPOPCNTDQ,
     // ---------------
     ARM_SVE2,
+    ARM_SVE2_BITPERM,
+    // ---------------
+    // Benchmark control bits. These are not hardware features. Each bit turns one
+    // native override off so the generic path runs instead, and each bit also changes
+    // getBuilderUniqueName (see benchSuffix), so the two arms of an A/B get separate
+    // object cache entries and cannot serve each other stale kernels.
+    BENCH_GENERIC_COMPRESS,
+    BENCH_GENERIC_EXPAND,
+    BENCH_GENERIC_SHIFT2,
+    BENCH_GENERIC_SHIFT4,
+    BENCH_GENERIC_BITPERM,
     // ---------------
     __Count
 };
@@ -60,6 +72,19 @@ public:
 
     bool hasFeature(const IDISA::Feature feature) const LLVM_READNONE {
         return mFeatureSet.test((size_t)feature);
+    }
+
+    // Folded into every ARM builder's unique name so a benchmark arm cannot read back
+    // a cache entry written by the other arm. Empty unless a BENCH_ bit is set, so the
+    // default builder names and the existing cache entries are unchanged.
+    std::string benchSuffix() const {
+        std::string s;
+        if (hasFeature(Feature::BENCH_GENERIC_COMPRESS)) s += "c";
+        if (hasFeature(Feature::BENCH_GENERIC_EXPAND))   s += "e";
+        if (hasFeature(Feature::BENCH_GENERIC_SHIFT2))   s += "s2";
+        if (hasFeature(Feature::BENCH_GENERIC_SHIFT4))   s += "s4";
+        if (hasFeature(Feature::BENCH_GENERIC_BITPERM))  s += "b";
+        return s.empty() ? s : ("_bg" + s);
     }
 
     virtual ~IDISA_Builder();

@@ -529,7 +529,7 @@ Value * IDISA_Builder::simd_srai(unsigned fw, Value * a, unsigned shift) {
 
 Value * IDISA_Builder::simd_sllv(unsigned fw, Value * v, Value * shifts) {
     if (fw >= 8) return CreateShl(fwCast(fw, v), fwCast(fw, shifts));
-    if (fw == 4 && getVectorBitWidth(v) == 128) {
+    if (!hasFeature(Feature::BENCH_GENERIC_SHIFT4) && fw == 4 && getVectorBitWidth(v) == 128) {
         // Fast path for 4-bit fields: two byte-lane shifts plus masking to
         // keep bits from crossing the nibble boundary, instead of the
         // generic doubling loop below. No architecture-specific intrinsics,
@@ -563,7 +563,7 @@ Value * IDISA_Builder::simd_sllv(unsigned fw, Value * v, Value * shifts) {
 
 Value * IDISA_Builder::simd_srlv(unsigned fw, Value * v, Value * shifts) {
     if (fw >= 8) return CreateLShr(fwCast(fw, v), fwCast(fw, shifts));
-    if (fw == 4 && getVectorBitWidth(v) == 128) {
+    if (!hasFeature(Feature::BENCH_GENERIC_SHIFT4) && fw == 4 && getVectorBitWidth(v) == 128) {
         auto splat8 = [&](uint8_t x) { return getSplat(16, getInt8(x)); };
         Value * loData = simd_and(v, splat8(0x0F));
         Value * hiData = simd_and(v, splat8(0xF0));

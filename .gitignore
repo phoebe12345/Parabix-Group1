@@ -37,3 +37,5 @@ TestOutput*
 # Don't track generated mask sweep data
 QA/IDISA_test/mask_sweep_a
 QA/IDISA_test/mask_sweep_b
+build-linux/
+build-crosscheck/
