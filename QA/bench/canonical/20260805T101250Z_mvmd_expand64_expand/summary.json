@@ -1,0 +1,69 @@
+{
+  "label": "mvmd_expand64_expand",
+  "kernel": "mvmd_expand64_test",
+  "scope": "kernel",
+  "quantity": "nanoseconds inside mvmd_expand64_test DoSegment, one counter row",
+  "switch_toggled": "-bench-generic-expand",
+  "unit": "nanoseconds",
+  "counter_step_ns": 41.67,
+  "quantisation_warning": false,
+  "n_pairs_accepted": 31,
+  "n_pairs_dropped": 0,
+  "arm_A_native": {
+    "n": 31,
+    "median_ns": 761997.0,
+    "iqr_ns": 19974.0,
+    "iqr_pct_of_median": 2.6212701624809545,
+    "p10_ns": 747973.0,
+    "p90_ns": 789472.0,
+    "min_ns": 743537.0,
+    "max_ns": 844369.0
+  },
+  "arm_B_control": {
+    "n": 31,
+    "median_ns": 2935937.0,
+    "iqr_ns": 16306.0,
+    "iqr_pct_of_median": 0.5553933888908379,
+    "p10_ns": 2925259.0,
+    "p90_ns": 2951952.0,
+    "min_ns": 2921422.0,
+    "max_ns": 2965316.0
+  },
+  "paired_ratio_B_over_A": {
+    "median": 3.865982582602172,
+    "p10": 3.7151627923472903,
+    "p90": 3.929170377364564,
+    "iqr": 0.10929787387517464,
+    "spread_floor": 2.929170377364564,
+    "ci95_low": 3.843941951608893,
+    "ci95_high": 3.8889690007037765,
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 20260804
+  },
+  "sign_test": {
+    "n_nonzero": 31,
+    "n_greater": 31,
+    "p_value": 9.313225746154785e-10
+  },
+  "w_null": 0.04235,
+  "w_null_ci": 0.025484,
+  "w_null_label": "bench_micro.sh:counter:mvmd_expand64_test:d0da2bc7+dd3deb3e",
+  "floor_signature": "same-command-line,pipeline-identical",
+  "expect_floor_signature": "separate-cache-entries,pipeline-identical",
+  "signal_rate": 0.0,
+  "counter_pct_arm_A": 3.8,
+  "counter_pct_arm_B": 13.1,
+  "conditions": {
+    "S1": true,
+    "S2": true,
+    "S3": true,
+    "S4": true,
+    "S5": true,
+    "S6": true,
+    "S7": false
+  },
+  "reportable": false,
+  "reasons_not_reportable": [
+    "S7: the floor's arms differ as 'same-command-line,pipeline-identical' but the measured arms differ as 'separate-cache-entries,pipeline-identical'. The floor does not contain the same confound."
+  ]
+}

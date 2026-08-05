@@ -1,0 +1,22 @@
+prefix        git-05ba04b3@080526034505
+switch        none (null arm B is ARM_bgc)
+
+Per-kernel proof. vector/scalar is the instruction count inside DoSegment.
+The operation under the switch is a part of each kernel, never the whole of it,
+so the summed time of these kernels is an UPPER BOUND on the operation's share.
+  KERNEL               ARM        MD5                                VEC/SCALAR    
+  u8depositMask        ARM        ba80e9eee29b83c364460f407cefacc9   426 55        
+  u8depositMask        ARM_bgc    ba80e9eee29b83c364460f407cefacc9   426 55        
+  FieldDeposit64_3     ARM        b4a5b02220ee017d70452399d1aa05a8   171 30        
+  FieldDeposit64_3     ARM_bgc    b4a5b02220ee017d70452399d1aa05a8   171 30        
+  FieldDeposit64_6     ARM        fcac316cbba6642fea3d3159f4e2a9c2   279 31        
+  FieldDeposit64_6     ARM_bgc    fcac316cbba6642fea3d3159f4e2a9c2   279 31        
+
+pipeline      Pcc3ad6129174c9f97758ec221ddf037ed1e34d4d
+  arm A md5   ee62bd622e4927d35d65c77b71e289e2
+  arm B md5   cd5a6804499cbbaacff22cf41244eca6
+  signature   pipeline-distinct
+  NOTE: the switch is not scoped to the deposit kernels. The pipeline driver
+  image differs between the arms and it contributes the PIPE component of every
+  counter row. The floor for this configuration must be measured with an arm B
+  that reproduces the same pipeline difference. S7 enforces that.

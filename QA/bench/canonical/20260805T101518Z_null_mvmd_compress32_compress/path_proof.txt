@@ -1,0 +1,18 @@
+prefix        git-c98e5f5f@080526031403
+kernel        mvmd_compress32_test
+arm A         /Users/manvir/.parabix/objcache/git-c98e5f5f@080526031403_mvmd_compress32_test_ARM.o
+  md5         de69a0ae9a98a2d3b9c3a6d58c97b212
+  vector/scalar insns 34 32
+  eor.16b     0
+arm B         /Users/manvir/.parabix/objcache/git-c98e5f5f@080526031403_mvmd_compress32_test_ARM_bgb.o
+  md5         de69a0ae9a98a2d3b9c3a6d58c97b212
+  vector/scalar insns 34 32
+  eor.16b     0
+pipeline      Pad979215b2a03e39d66bf4a14a5a02a9e58877d8
+  arm A md5   1f5efb910d9f6f9c054099173e829e8c
+  arm B md5   7f0997d53f7ffec5fa3b5660748f2621
+  signature   pipeline-distinct
+  NOTE: the switch is not scoped to the kernel. The pipeline driver image
+  differs between the arms, so part of any measured difference belongs to it.
+  The noise floor for this configuration must be measured with an arm B that
+  reproduces this same pipeline difference. S7 enforces that.

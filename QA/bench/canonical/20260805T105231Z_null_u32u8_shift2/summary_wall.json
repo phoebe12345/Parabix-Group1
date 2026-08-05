@@ -1,0 +1,72 @@
+{
+  "label": "null_u32u8_shift2_wall",
+  "kernel": "deposit rows: u8depositMask FieldDeposit64_3 FieldDeposit64_6",
+  "scope": "process",
+  "quantity": "wall time of the u32u8 process, start to teardown",
+  "switch_toggled": "none (null arm B is ARM_bgc)",
+  "unit": "nanoseconds",
+  "counter_step_ns": 41.67,
+  "quantisation_warning": false,
+  "n_pairs_accepted": 31,
+  "n_pairs_dropped": 0,
+  "arm_A_native": {
+    "n": 31,
+    "median_ns": 300291667.0,
+    "iqr_ns": 4947500.0,
+    "iqr_pct_of_median": 1.6475648656610908,
+    "p10_ns": 297566875.0,
+    "p90_ns": 312349000.0,
+    "min_ns": 297384458.0,
+    "max_ns": 323726792.0
+  },
+  "arm_B_control": {
+    "n": 31,
+    "median_ns": 300348041.0,
+    "iqr_ns": 4300041.5,
+    "iqr_pct_of_median": 1.4316862149934915,
+    "p10_ns": 298633916.0,
+    "p90_ns": 313079208.0,
+    "min_ns": 297929291.0,
+    "max_ns": 314557041.0
+  },
+  "paired_ratio_B_over_A": {
+    "median": 0.9998018231184984,
+    "p10": 0.9582471594274353,
+    "p90": 1.0384235541454634,
+    "iqr": 0.01763217473767109,
+    "spread_floor": 0.041752840572564676,
+    "ci95_low": 0.9966600972684239,
+    "ci95_high": 1.0044439590260172,
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 20260804
+  },
+  "sign_test": {
+    "n_nonzero": 31,
+    "n_greater": 15,
+    "p_value": 1.0
+  },
+  "w_null": NaN,
+  "w_null_ci": NaN,
+  "w_null_label": "",
+  "floor_signature": "separate-cache-entries,pipeline-distinct",
+  "expect_floor_signature": "separate-cache-entries,pipeline-distinct",
+  "signal_rate": 0.0,
+  "counter_pct_arm_A": 39.4,
+  "counter_pct_arm_B": 39.5,
+  "conditions": {
+    "S1": false,
+    "S2": true,
+    "S3": false,
+    "S4": true,
+    "S5": true,
+    "S6": true,
+    "S7": true
+  },
+  "reportable": false,
+  "reasons_not_reportable": [
+    "S1: bootstrap 95% CI on median ratio [0.99666, 1.00444] contains 1.0",
+    "S3: exact sign test p = 1 is not below 0.01"
+  ],
+  "attribution_wall": 0.36365,
+  "min_effect_end_to_end": NaN
+}

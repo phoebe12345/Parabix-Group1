@@ -1,0 +1,12 @@
+D2a attribution, measured over the whole timing loop.
+
+The numerator is the summed nanoseconds of the counter rows for the kernels
+that CONTAIN simd_pext and simd_pdep. It is not the time of those operations.
+It is an upper bound on their share.
+
+  arm        deposit ns    pipeline ns        wall ns  of PIPELINE   of PROCESS
+  A           110238359      278715316      302692542       0.3955       0.3642
+  B           107166398      275941442      299666792       0.3884       0.3576
+
+  the pipeline is 0.9208 of the process on arm A, so the two attributions
+  differ by that factor. Only the PROCESS share may carry an end-to-end claim.

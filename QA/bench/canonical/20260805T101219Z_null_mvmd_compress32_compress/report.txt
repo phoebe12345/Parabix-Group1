@@ -1,0 +1,24 @@
+configuration : null_mvmd_compress32_compress
+scope         : kernel
+quantity      : nanoseconds inside mvmd_compress32_test DoSegment, one counter row
+switch toggled: none (null: ARM_bgs4)
+counter row   : mvmd_compress32_test
+unit          : nanoseconds (CNTVCT_EL0 at 1.000 GHz), not cycles; step 41.67 ns
+pairs         : 31 accepted, 0 dropped
+
+  arm                 median ns        IQR    IQR%       p10        p90        min        max    N
+  A native          755917.0    21061.5   2.79   741541.0   772941.0   737247.0   832868.0   31
+  B control         751285.0    24023.5   3.20   735830.0   780050.0   732823.0   807455.0   31
+
+  paired ratio B/A : median 1.00056   p10 0.96817   p90 1.03107   IQR 0.03253
+  bootstrap 95% CI : [0.98751, 1.01216]  (10000 resamples, seed 20260804)
+  sign test        : 16 of 31 pairs above 1, exact two-sided p = 1
+  own spread       : p10..p90 of this run's paired ratios is 0.03183 from 1.0
+  this run IS the noise floor. S2 and S7 do not apply to it.
+  noise floor      : w_null = NOT SUPPLIED   (systematic, p10..p90 of the null's ratios)
+  arms differ in   : separate-cache-entries,pipeline-identical
+  floor arms differ: separate-cache-entries,pipeline-identical
+  counter % of pipeline : arm A 3.20, arm B 3.20
+
+NOISE FLOOR RUN. This is not a result and carries no verdict.
+  floor_spread 0.03183   floor_ci 0.01249

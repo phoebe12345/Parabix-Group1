@@ -1,0 +1,24 @@
+configuration : mvmd_compress32_compress
+scope         : kernel
+quantity      : nanoseconds inside mvmd_compress32_test DoSegment, one counter row
+switch toggled: -bench-generic-compress
+counter row   : mvmd_compress32_test
+unit          : nanoseconds (CNTVCT_EL0 at 1.000 GHz), not cycles; step 41.67 ns
+pairs         : 31 accepted, 0 dropped
+
+  arm                 median ns        IQR    IQR%       p10        p90        min        max    N
+  A native          754181.0    18029.5   2.39   739581.0   771637.0   735263.0   862972.0   31
+  B control        3468230.0    22069.0   0.64  3453372.0  3492233.0  3449960.0  3511488.0   31
+
+  paired ratio B/A : median 4.60300   p10 4.47728   p90 4.67923   IQR 0.10827
+  bootstrap 95% CI : [4.58253, 4.62874]  (10000 resamples, seed 20260804)
+  sign test        : 31 of 31 pairs above 1, exact two-sided p = 9.313e-10
+  own spread       : p10..p90 of this run's paired ratios is 3.67923 from 1.0
+  noise floor      : w_null = 0.03182   (systematic, p10..p90 of the null's ratios)
+                     null CI half-width 0.01248, printed only; it shrinks with N
+  floor from       : bench_micro.sh:counter:mvmd_compress32_test:d0da2bc7+dd3deb3e
+  arms differ in   : separate-cache-entries,pipeline-identical
+  floor arms differ: separate-cache-entries,pipeline-identical
+  counter % of pipeline : arm A 3.20, arm B 13.30
+
+REPORTABLE

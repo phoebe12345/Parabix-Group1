@@ -1,0 +1,56 @@
+=== D2b kernel-group level: summed nanoseconds of the kernels that contain the operation ===
+=== switch toggled: none, this is the noise floor ===
+configuration : null_u32u8_shift2_oplevel
+scope         : kernel-group
+quantity      : summed ns of u8depositMask and the FieldDeposit64 rows, an UPPER BOUND on simd_pext and simd_pdep
+switch toggled: none (null arm B is ARM_bgc)
+counter row   : deposit rows: u8depositMask FieldDeposit64_3 FieldDeposit64_6
+unit          : nanoseconds (CNTVCT_EL0 at 1.000 GHz), not cycles; step 41.67 ns
+pairs         : 31 accepted, 0 dropped
+
+  arm                 median ns        IQR    IQR%       p10        p90        min        max    N
+  A native       109200981.0   593045.5   0.54 108565730.0 109666722.0 108484540.0 111292941.0   31
+  B control      109385482.0   723227.0   0.66 108997941.0 110426233.0 108644035.0 115012807.0   31
+
+  paired ratio B/A : median 1.00169   p10 0.99400   p90 1.01190   IQR 0.01262
+  bootstrap 95% CI : [0.99865, 1.00656]  (10000 resamples, seed 20260804)
+  sign test        : 19 of 31 pairs above 1, exact two-sided p = 0.281
+  own spread       : p10..p90 of this run's paired ratios is 0.01190 from 1.0
+  this run IS the noise floor. S2 and S7 do not apply to it.
+  noise floor      : w_null = NOT SUPPLIED   (systematic, p10..p90 of the null's ratios)
+  arms differ in   : separate-cache-entries,pipeline-distinct
+  floor arms differ: separate-cache-entries,pipeline-distinct
+  counter % of pipeline : arm A 39.40, arm B 39.50
+  share of PIPELINE time in the measured kernels : 0.3946
+
+NOISE FLOOR RUN. This is not a result and carries no verdict.
+  floor_spread 0.01190   floor_ci 0.00656
+
+=== D2b end to end: wall time of the whole u32u8 process ===
+=== switch toggled: none, this is the noise floor ===
+configuration : null_u32u8_shift2_wall
+scope         : process
+quantity      : wall time of the u32u8 process, start to teardown
+switch toggled: none (null arm B is ARM_bgc)
+counter row   : deposit rows: u8depositMask FieldDeposit64_3 FieldDeposit64_6
+unit          : nanoseconds (CNTVCT_EL0 at 1.000 GHz), not cycles; step 41.67 ns
+pairs         : 31 accepted, 0 dropped
+
+  arm                 median ns        IQR    IQR%       p10        p90        min        max    N
+  A native       300291667.0  4947500.0   1.65 297566875.0 312349000.0 297384458.0 323726792.0   31
+  B control      300348041.0  4300041.5   1.43 298633916.0 313079208.0 297929291.0 314557041.0   31
+
+  paired ratio B/A : median 0.99980   p10 0.95825   p90 1.03842   IQR 0.01763
+  bootstrap 95% CI : [0.99666, 1.00444]  (10000 resamples, seed 20260804)
+  sign test        : 15 of 31 pairs above 1, exact two-sided p = 1
+  own spread       : p10..p90 of this run's paired ratios is 0.04175 from 1.0
+  this run IS the noise floor. S2 and S7 do not apply to it.
+  noise floor      : w_null = NOT SUPPLIED   (systematic, p10..p90 of the null's ratios)
+  arms differ in   : separate-cache-entries,pipeline-distinct
+  floor arms differ: separate-cache-entries,pipeline-distinct
+  counter % of pipeline : arm A 39.40, arm B 39.50
+  share of PROCESS  time in the measured kernels : 0.3636
+  min resolvable end-to-end effect : unknown until w_null is supplied
+
+NOISE FLOOR RUN. This is not a result and carries no verdict.
+  floor_spread 0.04175   floor_ci 0.00444

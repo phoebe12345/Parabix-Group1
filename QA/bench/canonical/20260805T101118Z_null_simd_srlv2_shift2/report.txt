@@ -1,0 +1,24 @@
+configuration : null_simd_srlv2_shift2
+scope         : kernel
+quantity      : nanoseconds inside simd_srlv2_test DoSegment, one counter row
+switch toggled: none (null: ARM_bge)
+counter row   : simd_srlv2_test
+unit          : nanoseconds (CNTVCT_EL0 at 1.000 GHz), not cycles; step 41.67 ns
+pairs         : 31 accepted, 0 dropped
+
+  arm                 median ns        IQR    IQR%       p10        p90        min        max    N
+  A native          957192.0    10226.5   1.07   951143.0   968502.0   950014.0   992993.0   31
+  B control         959077.0     7724.5   0.81   952178.0   968704.0   949273.0   986727.0   31
+
+  paired ratio B/A : median 1.00170   p10 0.98736   p90 1.01473   IQR 0.01853
+  bootstrap 95% CI : [0.99573, 1.00790]  (10000 resamples, seed 20260804)
+  sign test        : 17 of 31 pairs above 1, exact two-sided p = 0.7201
+  own spread       : p10..p90 of this run's paired ratios is 0.01473 from 1.0
+  this run IS the noise floor. S2 and S7 do not apply to it.
+  noise floor      : w_null = NOT SUPPLIED   (systematic, p10..p90 of the null's ratios)
+  arms differ in   : separate-cache-entries,pipeline-distinct
+  floor arms differ: separate-cache-entries,pipeline-distinct
+  counter % of pipeline : arm A 2.20, arm B 2.20
+
+NOISE FLOOR RUN. This is not a result and carries no verdict.
+  floor_spread 0.01473   floor_ci 0.00790

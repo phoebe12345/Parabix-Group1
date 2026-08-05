@@ -1,0 +1,21 @@
+{
+  "utc": "2026-08-05T10:12:51Z",
+  "git_head": "05ba04b32a6956c3d6b7132ff8f475e8f7419728",
+  "git_branch": "manvir/fix-arm-detection",
+  "git_diff_stat": "",
+  "git_status_porcelain": "",
+  "uname": "Darwin MacBook-Pro-16.local 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:27 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6041 arm64",
+  "hw_model": "Mac16,7",
+  "llvm_objdump_version": "  Optimized build.",
+  "objcache_dir": "/Users/manvir/.parabix/objcache",
+  "cache_prefixes": "git-c98e5f5f@080526014631 git-c98e5f5f@080526014721",
+  "newest_cache_prefix": "git-c98e5f5f@080526014721",
+  "object_cache_o_mtime": "2026-08-05T01:47:21Z",
+  "bin_idisa_test": "2026-08-05T01:47:22Z 172728",
+  "bin_u32u8": "2026-08-05T01:47:22Z 115144",
+  "cachejanitord": "",
+  "powermode": "2",
+  "power_source": "Now drawing from 'AC Power'",
+  "smoke_not_a_measurement": false,
+  "corpus_sha256": "8c92935ce3b0127e3cf6f1133657247bb281ea36b7ab15d22ce98615445c281f"
+}

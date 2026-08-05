@@ -1,0 +1,24 @@
+configuration : simd_sllv2_shift2
+scope         : kernel
+quantity      : nanoseconds inside simd_sllv2_test DoSegment, one counter row
+switch toggled: -bench-generic-shift2
+counter row   : simd_sllv2_test
+unit          : nanoseconds (CNTVCT_EL0 at 1.000 GHz), not cycles; step 41.67 ns
+pairs         : 31 accepted, 0 dropped
+
+  arm                 median ns        IQR    IQR%       p10        p90        min        max    N
+  A native          839576.0     5703.5   0.68   835261.0   843691.0   834200.0   906506.0   31
+  B control        1307885.0     5629.5   0.43  1302770.0  1317108.0  1298241.0  1359704.0   31
+
+  paired ratio B/A : median 1.55846   p10 1.54930   p90 1.56946   IQR 0.01137
+  bootstrap 95% CI : [1.55430, 1.56207]  (10000 resamples, seed 20260804)
+  sign test        : 31 of 31 pairs above 1, exact two-sided p = 9.313e-10
+  own spread       : p10..p90 of this run's paired ratios is 0.56946 from 1.0
+  noise floor      : w_null = 0.02744   (systematic, p10..p90 of the null's ratios)
+                     null CI half-width 0.01185, printed only; it shrinks with N
+  floor from       : bench_micro.sh:counter:simd_sllv2_test:d0da2bc7+dd3deb3e
+  arms differ in   : separate-cache-entries,pipeline-identical
+  floor arms differ: separate-cache-entries,pipeline-identical
+  counter % of pipeline : arm A 1.90, arm B 2.90
+
+REPORTABLE

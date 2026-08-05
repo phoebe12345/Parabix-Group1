@@ -1,0 +1,12 @@
+{
+  "counter": {
+    "floor_spread": 0.014731543936555624,
+    "floor_ci": 0.007904852453586075,
+    "label": "bench_micro.sh:counter:simd_srlv2_test:d0da2bc7+dd3deb3e",
+    "signature": "separate-cache-entries,pipeline-distinct",
+    "driver": "bench_micro.sh",
+    "quantity": "counter",
+    "n_pairs": 31,
+    "session": "/Users/manvir/sfu/479summer2026/Parabix-Group1/QA/bench/results/20260805T101118Z_null_simd_srlv2_shift2"
+  }
+}

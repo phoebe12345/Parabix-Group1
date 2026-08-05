@@ -1,0 +1,58 @@
+=== D2b kernel-group level: summed nanoseconds of the kernels that contain the operation ===
+=== switch toggled: -bench-generic-shift4 ===
+configuration : u32u8_shift4_oplevel
+scope         : kernel-group
+quantity      : summed ns of u8depositMask and the FieldDeposit64 rows, an UPPER BOUND on simd_pext and simd_pdep
+switch toggled: -bench-generic-shift4
+counter row   : deposit rows: u8depositMask FieldDeposit64_3 FieldDeposit64_6
+unit          : nanoseconds (CNTVCT_EL0 at 1.000 GHz), not cycles; step 41.67 ns
+pairs         : 31 accepted, 0 dropped
+
+  arm                 median ns        IQR    IQR%       p10        p90        min        max    N
+  A native       111551679.0   965020.0   0.87 110742670.0 112320249.0 110481527.0 113057269.0   31
+  B control      175399470.0   625816.0   0.36 174435563.0 176294022.0 174294491.0 179574590.0   31
+
+  paired ratio B/A : median 1.57146   p10 1.55435   p90 1.58396   IQR 0.01192
+  bootstrap 95% CI : [1.56661, 1.57710]  (10000 resamples, seed 20260804)
+  sign test        : 31 of 31 pairs above 1, exact two-sided p = 9.313e-10
+  own spread       : p10..p90 of this run's paired ratios is 0.58396 from 1.0
+  noise floor      : w_null = 0.01617   (systematic, p10..p90 of the null's ratios)
+                     null CI half-width 0.00459, printed only; it shrinks with N
+  floor from       : bench_u32u8.sh:op:c27b508d
+  arms differ in   : separate-cache-entries,pipeline-distinct
+  floor arms differ: separate-cache-entries,pipeline-distinct
+  counter % of pipeline : arm A 39.60, arm B 50.60
+  share of PIPELINE time in the measured kernels : 0.3950
+  min resolvable pipeline-level effect : 0.0409 (w_null / share of PIPELINE time 0.3950)
+  this is NOT an end-to-end figure. Scope is kernel-group.
+
+REPORTABLE
+
+=== D2b end to end: wall time of the whole u32u8 process ===
+=== switch toggled: -bench-generic-shift4 ===
+configuration : u32u8_shift4_wall
+scope         : process
+quantity      : wall time of the u32u8 process, start to teardown
+switch toggled: -bench-generic-shift4
+counter row   : deposit rows: u8depositMask FieldDeposit64_3 FieldDeposit64_6
+unit          : nanoseconds (CNTVCT_EL0 at 1.000 GHz), not cycles; step 41.67 ns
+pairs         : 31 accepted, 0 dropped
+
+  arm                 median ns        IQR    IQR%       p10        p90        min        max    N
+  A native       305866541.0 10061437.5   3.29 303447583.0 319570333.0 302605375.0 342796208.0   31
+  B control      370049209.0  5623416.5   1.52 368283334.0 380725417.0 367666833.0 384441417.0   31
+
+  paired ratio B/A : median 1.21012   p10 1.16920   p90 1.23673   IQR 0.02280
+  bootstrap 95% CI : [1.20034, 1.21472]  (10000 resamples, seed 20260804)
+  sign test        : 31 of 31 pairs above 1, exact two-sided p = 9.313e-10
+  own spread       : p10..p90 of this run's paired ratios is 0.23673 from 1.0
+  noise floor      : w_null = 0.03086   (systematic, p10..p90 of the null's ratios)
+                     null CI half-width 0.00902, printed only; it shrinks with N
+  floor from       : bench_u32u8.sh:wall:c27b508d
+  arms differ in   : separate-cache-entries,pipeline-distinct
+  floor arms differ: separate-cache-entries,pipeline-distinct
+  counter % of pipeline : arm A 39.60, arm B 50.60
+  share of PROCESS  time in the measured kernels : 0.3647
+  min resolvable end-to-end effect : 0.0846 (w_null / share of PROCESS time 0.3647)
+
+REPORTABLE

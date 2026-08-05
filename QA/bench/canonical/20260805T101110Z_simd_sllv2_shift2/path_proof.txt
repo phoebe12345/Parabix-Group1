@@ -1,0 +1,14 @@
+prefix        git-c98e5f5f@080526014721
+kernel        simd_sllv2_test
+arm A         /Users/manvir/.parabix/objcache/git-c98e5f5f@080526014721_simd_sllv2_test_ARM.o
+  md5         ed2f658930cc5d01bc68b653cb0a9c47
+  vector/scalar insns 11 11
+  eor.16b     0
+arm B         /Users/manvir/.parabix/objcache/git-c98e5f5f@080526014721_simd_sllv2_test_ARM_bgs2.o
+  md5         2c9c81f4fe371449f522f2db15b11bbf
+  vector/scalar insns 16 11
+  eor.16b     2
+pipeline      P963dc9455bf98f7c15564bf1a1e964a10f43b8c3
+  arm A md5   8c7778e7db6f53d0bb876e33ed04dbdc
+  arm B md5   8c7778e7db6f53d0bb876e33ed04dbdc
+  signature   pipeline-identical

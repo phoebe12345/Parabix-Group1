@@ -1,0 +1,43 @@
+{
+ "input": "/private/tmp/claude-501/-Users-manvir-sfu-479summer2026/174d3d2d-3839-480f-a0ca-518324072485/scratchpad/nf_1280mb",
+ "pairs": 31,
+ "null_flag": "-bench-generic-bitperm",
+ "floor": 0.00442784163517751,
+ "null_stats": {
+  "median": 0.9994422540938542,
+  "p10": 0.996961215485988,
+  "p90": 1.0044278416351775,
+  "ci": [
+   0.9985142557406552,
+   1.0012945246466476
+  ],
+  "above": 12,
+  "p_sign": 0.28104151505976915
+ },
+ "measured": {
+  "median": 1.019097318603231,
+  "p10": 1.0147666194460832,
+  "p90": 1.0232975702247125,
+  "ci": [
+   1.0181462518940936,
+   1.0198857894582976
+  ],
+  "above": 30,
+  "p_sign": 2.9802322387695312e-08
+ },
+ "kernels_differing": [
+  "elemFilter_8"
+ ],
+ "pipeline_distinct": true,
+ "gates": {
+  "S1_ci_excludes_1": true,
+  "S2_3x_floor": true,
+  "S3_sign_p<0.01": true,
+  "S4_path_proof": true,
+  "S5_outputs_equal": true,
+  "S6_not_void": true,
+  "S7_floor_structure": true
+ },
+ "verdict": "REPORTABLE",
+ "prefix": "git-05ba04b3@080526034505"
+}

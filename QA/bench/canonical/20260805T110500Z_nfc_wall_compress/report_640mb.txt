@@ -1,0 +1,24 @@
+cache prefix: git-05ba04b3@080526034505
+arm 'native': 81 kernels + 1 pipeline objects, scalar leak: False
+arm '-bench-generic-compress': 81 kernels + 1 pipeline objects, scalar leak: False
+arm '-bench-generic-bitperm': 81 kernels + 1 pipeline objects, scalar leak: False
+arm '-bench-generic-shift4': 81 kernels + 1 pipeline objects, scalar leak: False
+arm '-bench-generic-shift2': 81 kernels + 1 pipeline objects, scalar leak: False
+measured pair: 1 kernels differ, pipeline distinct: True, missing: []
+differing kernels: ['elemFilter_8']
+candidate -bench-generic-bitperm: 0 kernel diffs, pipeline distinct: True, missing 0
+null bit: -bench-generic-bitperm
+outputs identical: True
+NULL  (native vs -bench-generic-bitperm): median 1.0002  p10 0.9957  p90 1.0082  CI95 [0.9989,1.0010]  sign 17/31 p=7.20e-01
+MEAS  (native vs -bench-generic-compress): median 1.0188  p10 1.0107  p90 1.0224  CI95 [1.0177,1.0208]  sign 30/31 p=2.98e-08
+
+floor_spread 0.0082   effect 0.0188   scope process
+  S1_ci_excludes_1: PASS
+  S2_3x_floor: FAIL
+  S3_sign_p<0.01: PASS
+  S4_path_proof: PASS
+  S5_outputs_equal: PASS
+  S6_not_void: PASS
+  S7_floor_structure: PASS
+
+NOT REPORTABLE: generic-compress over native = 1.0188 (floor 0.0082, N=31, whole-process wall time)

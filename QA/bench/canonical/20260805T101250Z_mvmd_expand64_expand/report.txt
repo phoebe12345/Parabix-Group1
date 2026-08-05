@@ -1,0 +1,25 @@
+configuration : mvmd_expand64_expand
+scope         : kernel
+quantity      : nanoseconds inside mvmd_expand64_test DoSegment, one counter row
+switch toggled: -bench-generic-expand
+counter row   : mvmd_expand64_test
+unit          : nanoseconds (CNTVCT_EL0 at 1.000 GHz), not cycles; step 41.67 ns
+pairs         : 31 accepted, 0 dropped
+
+  arm                 median ns        IQR    IQR%       p10        p90        min        max    N
+  A native          761997.0    19974.0   2.62   747973.0   789472.0   743537.0   844369.0   31
+  B control        2935937.0    16306.0   0.56  2925259.0  2951952.0  2921422.0  2965316.0   31
+
+  paired ratio B/A : median 3.86598   p10 3.71516   p90 3.92917   IQR 0.10930
+  bootstrap 95% CI : [3.84394, 3.88897]  (10000 resamples, seed 20260804)
+  sign test        : 31 of 31 pairs above 1, exact two-sided p = 9.313e-10
+  own spread       : p10..p90 of this run's paired ratios is 2.92917 from 1.0
+  noise floor      : w_null = 0.04235   (systematic, p10..p90 of the null's ratios)
+                     null CI half-width 0.02548, printed only; it shrinks with N
+  floor from       : bench_micro.sh:counter:mvmd_expand64_test:d0da2bc7+dd3deb3e
+  arms differ in   : separate-cache-entries,pipeline-identical
+  floor arms differ: same-command-line,pipeline-identical
+  counter % of pipeline : arm A 3.80, arm B 13.10
+
+NOT REPORTABLE: no difference resolvable at N=31 with a noise floor of 0.04235
+  reason: S7: the floor's arms differ as 'same-command-line,pipeline-identical' but the measured arms differ as 'separate-cache-entries,pipeline-identical'. The floor does not contain the same confound.

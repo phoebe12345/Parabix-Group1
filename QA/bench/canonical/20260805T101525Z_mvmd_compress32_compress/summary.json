@@ -1,0 +1,67 @@
+{
+  "label": "mvmd_compress32_compress",
+  "kernel": "mvmd_compress32_test",
+  "scope": "kernel",
+  "quantity": "nanoseconds inside mvmd_compress32_test DoSegment, one counter row",
+  "switch_toggled": "-bench-generic-compress",
+  "unit": "nanoseconds",
+  "counter_step_ns": 41.67,
+  "quantisation_warning": false,
+  "n_pairs_accepted": 31,
+  "n_pairs_dropped": 0,
+  "arm_A_native": {
+    "n": 31,
+    "median_ns": 4055797.0,
+    "iqr_ns": 19435.0,
+    "iqr_pct_of_median": 0.47919064982788834,
+    "p10_ns": 4034630.0,
+    "p90_ns": 4077793.0,
+    "min_ns": 4031170.0,
+    "max_ns": 4150892.0
+  },
+  "arm_B_control": {
+    "n": 31,
+    "median_ns": 3467174.0,
+    "iqr_ns": 15909.5,
+    "iqr_pct_of_median": 0.458860732112089,
+    "p10_ns": 3452353.0,
+    "p90_ns": 3494483.0,
+    "min_ns": 3445014.0,
+    "max_ns": 3518970.0
+  },
+  "paired_ratio_B_over_A": {
+    "median": 0.8549045930281142,
+    "p10": 0.8487775038874014,
+    "p90": 0.8642249481332281,
+    "iqr": 0.007350666762729219,
+    "spread_floor": 0.15122249611259864,
+    "ci95_low": 0.852374805617575,
+    "ci95_high": 0.8573862385300697,
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 20260804
+  },
+  "sign_test": {
+    "n_nonzero": 31,
+    "n_greater": 0,
+    "p_value": 9.313225746154785e-10
+  },
+  "w_null": 0.007786,
+  "w_null_ci": 0.003689,
+  "w_null_label": "bench_micro.sh:counter:mvmd_compress32_test:d0da2bc7+dd3deb3e",
+  "floor_signature": "separate-cache-entries,pipeline-distinct",
+  "expect_floor_signature": "separate-cache-entries,pipeline-distinct",
+  "signal_rate": 0.0,
+  "counter_pct_arm_A": 15.2,
+  "counter_pct_arm_B": 13.3,
+  "conditions": {
+    "S1": true,
+    "S2": true,
+    "S3": true,
+    "S4": true,
+    "S5": true,
+    "S6": true,
+    "S7": true
+  },
+  "reportable": true,
+  "reasons_not_reportable": []
+}

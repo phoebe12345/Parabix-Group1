@@ -1,0 +1,22 @@
+{
+  "op": {
+    "floor_spread": 0.01617018826397254,
+    "floor_ci": 0.0045943298021120516,
+    "label": "bench_u32u8.sh:op:c27b508d",
+    "signature": "separate-cache-entries,pipeline-distinct",
+    "driver": "bench_u32u8.sh",
+    "quantity": "op",
+    "n_pairs": 31,
+    "session": "/Users/manvir/sfu/479summer2026/Parabix-Group1/QA/bench/results/20260805T105403Z_null_u32u8_shift4"
+  },
+  "wall": {
+    "floor_spread": 0.03085529668996234,
+    "floor_ci": 0.00901577428660394,
+    "label": "bench_u32u8.sh:wall:c27b508d",
+    "signature": "separate-cache-entries,pipeline-distinct",
+    "driver": "bench_u32u8.sh",
+    "quantity": "wall",
+    "n_pairs": 31,
+    "session": "/Users/manvir/sfu/479summer2026/Parabix-Group1/QA/bench/results/20260805T105403Z_null_u32u8_shift4"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "label": "null_mvmd_compress64_compress",
+  "kernel": "mvmd_compress64_test",
+  "scope": "kernel",
+  "quantity": "nanoseconds inside mvmd_compress64_test DoSegment, one counter row",
+  "switch_toggled": "none (null: ARM_bge)",
+  "unit": "nanoseconds",
+  "counter_step_ns": 41.67,
+  "quantisation_warning": false,
+  "n_pairs_accepted": 31,
+  "n_pairs_dropped": 0,
+  "arm_A_native": {
+    "n": 31,
+    "median_ns": 4058828.0,
+    "iqr_ns": 32348.5,
+    "iqr_pct_of_median": 0.7969911511401814,
+    "p10_ns": 4040342.0,
+    "p90_ns": 4098878.0,
+    "min_ns": 4029019.0,
+    "max_ns": 4148367.0
+  },
+  "arm_B_control": {
+    "n": 31,
+    "median_ns": 4055100.0,
+    "iqr_ns": 14170.5,
+    "iqr_pct_of_median": 0.34944884219871275,
+    "p10_ns": 4035613.0,
+    "p90_ns": 4084601.0,
+    "min_ns": 4026515.0,
+    "max_ns": 4106000.0
+  },
+  "paired_ratio_B_over_A": {
+    "median": 0.9971863031785771,
+    "p10": 0.989387179343003,
+    "p90": 1.0054384010066475,
+    "iqr": 0.008000951025926684,
+    "spread_floor": 0.01061282065699698,
+    "ci95_low": 0.9945720784423484,
+    "ci95_high": 1.000706459612948,
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 20260804
+  },
+  "sign_test": {
+    "n_nonzero": 31,
+    "n_greater": 11,
+    "p_value": 0.14961278438568115
+  },
+  "w_null": NaN,
+  "w_null_ci": NaN,
+  "w_null_label": "",
+  "floor_signature": "separate-cache-entries,pipeline-distinct",
+  "expect_floor_signature": "separate-cache-entries,pipeline-distinct",
+  "signal_rate": 0.0,
+  "counter_pct_arm_A": 17.2,
+  "counter_pct_arm_B": 17.3,
+  "conditions": {
+    "S1": false,
+    "S2": true,
+    "S3": false,
+    "S4": true,
+    "S5": true,
+    "S6": true,
+    "S7": true
+  },
+  "reportable": false,
+  "reasons_not_reportable": [
+    "S1: bootstrap 95% CI on median ratio [0.99457, 1.00071] contains 1.0",
+    "S3: exact sign test p = 0.1496 is not below 0.01"
+  ]
+}

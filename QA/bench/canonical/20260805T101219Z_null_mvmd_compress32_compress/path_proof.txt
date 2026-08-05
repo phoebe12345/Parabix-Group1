@@ -1,0 +1,14 @@
+prefix        git-c98e5f5f@080526014721
+kernel        mvmd_compress32_test
+arm A         /Users/manvir/.parabix/objcache/git-c98e5f5f@080526014721_mvmd_compress32_test_ARM.o
+  md5         682366d9d21e1006b2e60196647386a3
+  vector/scalar insns 9 17
+  eor.16b     0
+arm B         /Users/manvir/.parabix/objcache/git-c98e5f5f@080526014721_mvmd_compress32_test_ARM_bgs4.o
+  md5         682366d9d21e1006b2e60196647386a3
+  vector/scalar insns 9 17
+  eor.16b     0
+pipeline      Pad979215b2a03e39d66bf4a14a5a02a9e58877d8
+  arm A md5   7f0997d53f7ffec5fa3b5660748f2621
+  arm B md5   7f0997d53f7ffec5fa3b5660748f2621
+  signature   pipeline-identical

@@ -1,0 +1,72 @@
+{
+  "label": "null_u32u8_shift4_oplevel",
+  "kernel": "deposit rows: u8depositMask FieldDeposit64_3 FieldDeposit64_6",
+  "scope": "kernel-group",
+  "quantity": "summed ns of u8depositMask and the FieldDeposit64 rows, an UPPER BOUND on simd_pext and simd_pdep",
+  "switch_toggled": "none (null arm B is ARM_bgc)",
+  "unit": "nanoseconds",
+  "counter_step_ns": 41.67,
+  "quantisation_warning": false,
+  "n_pairs_accepted": 31,
+  "n_pairs_dropped": 0,
+  "arm_A_native": {
+    "n": 31,
+    "median_ns": 111410144.0,
+    "iqr_ns": 913890.0,
+    "iqr_pct_of_median": 0.8202933477942547,
+    "p10_ns": 110510790.0,
+    "p90_ns": 112431452.0,
+    "min_ns": 109919292.0,
+    "max_ns": 113157053.0
+  },
+  "arm_B_control": {
+    "n": 31,
+    "median_ns": 111427734.0,
+    "iqr_ns": 901694.5,
+    "iqr_pct_of_median": 0.8092190944132455,
+    "p10_ns": 110625770.0,
+    "p90_ns": 112170326.0,
+    "min_ns": 110380387.0,
+    "max_ns": 113103990.0
+  },
+  "paired_ratio_B_over_A": {
+    "median": 0.9996647094561875,
+    "p10": 0.9838298117360275,
+    "p90": 1.0134741003158039,
+    "iqr": 0.012696866932381035,
+    "spread_floor": 0.01617018826397254,
+    "ci95_low": 0.9977453634364516,
+    "ci95_high": 1.004594329802112,
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 20260804
+  },
+  "sign_test": {
+    "n_nonzero": 31,
+    "n_greater": 15,
+    "p_value": 1.0
+  },
+  "w_null": NaN,
+  "w_null_ci": NaN,
+  "w_null_label": "",
+  "floor_signature": "separate-cache-entries,pipeline-distinct",
+  "expect_floor_signature": "separate-cache-entries,pipeline-distinct",
+  "signal_rate": 0.0,
+  "counter_pct_arm_A": 39.5,
+  "counter_pct_arm_B": 39.5,
+  "conditions": {
+    "S1": false,
+    "S2": true,
+    "S3": false,
+    "S4": true,
+    "S5": true,
+    "S6": true,
+    "S7": true
+  },
+  "reportable": false,
+  "reasons_not_reportable": [
+    "S1: bootstrap 95% CI on median ratio [0.99775, 1.00459] contains 1.0",
+    "S3: exact sign test p = 1 is not below 0.01"
+  ],
+  "attribution_pipeline": 0.396071,
+  "min_effect_pipeline_level": NaN
+}

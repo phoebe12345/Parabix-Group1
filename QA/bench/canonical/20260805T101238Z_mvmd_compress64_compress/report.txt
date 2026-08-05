@@ -1,0 +1,25 @@
+configuration : mvmd_compress64_compress
+scope         : kernel
+quantity      : nanoseconds inside mvmd_compress64_test DoSegment, one counter row
+switch toggled: -bench-generic-compress
+counter row   : mvmd_compress64_test
+unit          : nanoseconds (CNTVCT_EL0 at 1.000 GHz), not cycles; step 41.67 ns
+pairs         : 31 accepted, 0 dropped
+
+  arm                 median ns        IQR    IQR%       p10        p90        min        max    N
+  A native          759072.0    33530.5   4.42   745331.0   995032.0   735977.0  1013543.0   31
+  B control        2171489.0    22976.5   1.06  2157242.0  2192666.0  2149873.0  2222799.0   31
+
+  paired ratio B/A : median 2.86476   p10 2.19106   p90 2.90977   IQR 0.13955
+  bootstrap 95% CI : [2.83044, 2.88282]  (10000 resamples, seed 20260804)
+  sign test        : 31 of 31 pairs above 1, exact two-sided p = 9.313e-10
+  own spread       : p10..p90 of this run's paired ratios is 1.90977 from 1.0
+  noise floor      : w_null = 0.23023   (systematic, p10..p90 of the null's ratios)
+                     null CI half-width 0.02126, printed only; it shrinks with N
+  floor from       : bench_micro.sh:counter:mvmd_compress64_test:d0da2bc7+dd3deb3e
+  arms differ in   : separate-cache-entries,pipeline-identical
+  floor arms differ: same-command-line,pipeline-identical
+  counter % of pipeline : arm A 3.70, arm B 10.00
+
+NOT REPORTABLE: no difference resolvable at N=31 with a noise floor of 0.23023
+  reason: S7: the floor's arms differ as 'same-command-line,pipeline-identical' but the measured arms differ as 'separate-cache-entries,pipeline-identical'. The floor does not contain the same confound.

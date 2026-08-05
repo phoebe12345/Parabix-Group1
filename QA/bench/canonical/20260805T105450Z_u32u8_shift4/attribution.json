@@ -1,0 +1,18 @@
+{
+  "A": {
+    "deposit_ns": 111551679.0,
+    "pipeline_ns": 282376650.0,
+    "wall_ns": 305866541.0,
+    "attribution_pipeline": 0.39504569163208075,
+    "attribution_wall": 0.3647070341047862,
+    "pipeline_share_of_process": 0.9232021556748177
+  },
+  "B": {
+    "deposit_ns": 175399470.0,
+    "pipeline_ns": 346091961.0,
+    "wall_ns": 370049209.0,
+    "attribution_pipeline": 0.5068001853992788,
+    "attribution_wall": 0.47398958228823024,
+    "pipeline_share_of_process": 0.9352592914203472
+  }
+}

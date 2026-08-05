@@ -1,0 +1,72 @@
+{
+  "label": "null_u32u8_shift4_wall",
+  "kernel": "deposit rows: u8depositMask FieldDeposit64_3 FieldDeposit64_6",
+  "scope": "process",
+  "quantity": "wall time of the u32u8 process, start to teardown",
+  "switch_toggled": "none (null arm B is ARM_bgc)",
+  "unit": "nanoseconds",
+  "counter_step_ns": 41.67,
+  "quantisation_warning": false,
+  "n_pairs_accepted": 31,
+  "n_pairs_dropped": 0,
+  "arm_A_native": {
+    "n": 31,
+    "median_ns": 305660125.0,
+    "iqr_ns": 4702708.0,
+    "iqr_pct_of_median": 1.5385415418514272,
+    "p10_ns": 303273500.0,
+    "p90_ns": 315634625.0,
+    "min_ns": 300805542.0,
+    "max_ns": 330036042.0
+  },
+  "arm_B_control": {
+    "n": 31,
+    "median_ns": 306032166.0,
+    "iqr_ns": 4018688.5,
+    "iqr_pct_of_median": 1.3131588592553372,
+    "p10_ns": 303326417.0,
+    "p90_ns": 314547792.0,
+    "min_ns": 302744209.0,
+    "max_ns": 320238417.0
+  },
+  "paired_ratio_B_over_A": {
+    "median": 1.0024893058573126,
+    "p10": 0.9691447033100377,
+    "p90": 1.0290769592533537,
+    "iqr": 0.029884359839741137,
+    "spread_floor": 0.03085529668996234,
+    "ci95_low": 0.996778891027922,
+    "ci95_high": 1.009015774286604,
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 20260804
+  },
+  "sign_test": {
+    "n_nonzero": 31,
+    "n_greater": 18,
+    "p_value": 0.47312965989112854
+  },
+  "w_null": NaN,
+  "w_null_ci": NaN,
+  "w_null_label": "",
+  "floor_signature": "separate-cache-entries,pipeline-distinct",
+  "expect_floor_signature": "separate-cache-entries,pipeline-distinct",
+  "signal_rate": 0.0,
+  "counter_pct_arm_A": 39.5,
+  "counter_pct_arm_B": 39.5,
+  "conditions": {
+    "S1": false,
+    "S2": true,
+    "S3": false,
+    "S4": true,
+    "S5": true,
+    "S6": true,
+    "S7": true
+  },
+  "reportable": false,
+  "reasons_not_reportable": [
+    "S1: bootstrap 95% CI on median ratio [0.99678, 1.00902] contains 1.0",
+    "S3: exact sign test p = 0.4731 is not below 0.01"
+  ],
+  "attribution_wall": 0.36449,
+  "min_effect_end_to_end": NaN
+}
