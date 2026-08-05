@@ -104,8 +104,11 @@ set -e
 if [ "$control_status" -eq 0 ]; then
     echo "UNEXPECTED PASS: no SVE instruction reached the CPU, so the SVE2 rows above prove nothing"
     failures=$((failures + 1))
+elif [ "$control_status" -eq 132 ]; then
+    echo "EXPECTED FAILURE (status 132, SIGILL): a non-SVE CPU rejected the emitted code"
 else
-    echo "EXPECTED FAILURE (status $control_status): a non-SVE CPU rejected the emitted code"
+    echo "UNEXPECTED STATUS $control_status: only SIGILL (132) proves the CPU rejected the instruction"
+    failures=$((failures + 1))
 fi
 
 echo
